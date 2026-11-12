@@ -1,0 +1,36 @@
+format_version = "1.0.0"
+
+[package]
+id = "kiakio/goblin-gathering"
+name = "地精采集系统"
+version = "1.0.0"
+authors = ["KIAkio"]
+license = "All Rights Reserved"
+description = "蘑菇与浆果采集玩法，按稀有度随机获取并写入地精共享背包"
+keywords = ["sealdice", "gathering", "goblin", "mushroom", "berry"]
+
+[package.seal]
+min_version = "1.6.0"
+
+[dependencies]
+
+[permissions]
+network = false
+file_read = []
+file_write = []
+
+[contents]
+scripts = ["scripts/*.js"]
+decks = []
+reply = []
+helpdoc = []
+templates = []
+
+[store]
+readme = "README.md"
+icon = ""
+banner = ""
+screenshots = []
+category = "game"
+
+[config]
