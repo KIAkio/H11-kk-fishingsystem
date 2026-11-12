@@ -168,10 +168,12 @@
     if (!raw) return { nextId: 0, members: {} };
     try {
       const parsed = JSON.parse(raw);
-      return {
-        nextId: Math.max(0, Number(parsed.nextId) || 0),
-        members: parsed.members && typeof parsed.members === 'object' ? parsed.members : {}
-      };
+      const members = parsed.members && typeof parsed.members === 'object' ? parsed.members : {};
+      for (const [uid, record] of Object.entries(members)) {
+        if (typeof record === 'string') members[uid] = { id: record, name: '' };
+        else if (!record || typeof record !== 'object') members[uid] = { id: '', name: '' };
+      }
+      return { nextId: Math.max(0, Number(parsed.nextId) || 0), members };
     } catch (e) {
       console.log('[地精背包] 群档案编号表损坏：' + e);
       return { nextId: 0, members: {} };
@@ -182,17 +184,34 @@
     seal.vars.strSet(ctx, GROUP_PROFILE_VAR, JSON.stringify(data));
   }
 
-  function getOrCreateGroupProfile(ctx) {
+  function getOrCreateGroupProfile(ctx, registeredName) {
     const userId = getPlayerId(ctx);
     if (!userId) throw new Error('无法读取你的平台用户 ID。');
     const profiles = loadGroupProfiles(ctx);
-    if (profiles.members[userId]) return { id: profiles.members[userId], created: false };
-
+    const platformName = String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
+    const customName = String(registeredName || '').trim();
+    if (profiles.members[userId]) {
+      const record = profiles.members[userId];
+      if (customName) record.name = customName;
+      if (!record.name) record.name = platformName;
+      saveGroupProfiles(ctx, profiles);
+      return { id: record.id, name: record.name, created: false };
+    }
     const id = String(profiles.nextId).padStart(3, '0');
-    profiles.members[userId] = id;
+    const name = customName || platformName;
+    profiles.members[userId] = { id, name };
     profiles.nextId += 1;
     saveGroupProfiles(ctx, profiles);
-    return { id, created: true };
+    return { id, name, created: true };
+  }
+
+  function getRegisteredName(ctx) {
+    const userId = getPlayerId(ctx);
+    if (!userId) return String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
+    const profiles = loadGroupProfiles(ctx);
+    const record = profiles.members[userId];
+    if (record && typeof record === 'object' && record.name) return record.name;
+    return String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
   }
 
   function getCategoryKey(input) {
@@ -283,20 +302,23 @@
   }
 
 
-  registerCommand('注册', '建立档案：.注册', (ctx, msg) => {
-    const profile = getOrCreateGroupProfile(ctx);
+  registerCommand('注册', '建立档案：.注册 姓名', (ctx, msg, args) => {
+    const requestedName = String(args.getArgN(1) || '').trim();
+    const profile = getOrCreateGroupProfile(ctx, requestedName);
     const data = loadData(ctx);
     saveData(ctx, data);
-    const name = String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
-    reply(ctx, msg,
-      '📋【' + name + '的档案】\n' +
-      'ID：' + profile.id + '\n' +
-      '❤️ HP：' + data.hp + ' / ' + data.maxHp + '\n' +
-      '⭐ 等级：1\n' +
-      '✨ 经验：0\n' +
-      '🎒 背包：' + (Object.values(data.items).reduce((n, group) => n + Object.values(group).reduce((s, item) => s + (Number(item.count) || 0), 0), 0) || '空') + '\n\n' +
-      'BUGx1：一只小蜘蛛....你怎么在这儿？'
-    );
+    const totalCount = Object.values(data.items)
+      .reduce((n, group) => n + Object.values(group)
+        .reduce((sum, item) => sum + (Number(item.count) || 0), 0), 0);
+    const lines = [
+      '📋【' + profile.name + '的档案】',
+      'ID：' + profile.id,
+      '❤️ HP：' + data.hp + ' / ' + data.maxHp,
+      '⭐ 等级：1',
+      '✨ 经验：0',
+      '🎒 背包：' + (totalCount || '空')
+    ];
+    reply(ctx, msg, lines.join(String.fromCharCode(10)));
   });
 
   registerCommand('背包', '查看背包：.背包 / .背包 鱼类、蘑菇、浆果、日用品、训练装备、其他', (ctx, msg, args) => {
@@ -304,7 +326,7 @@
     saveData(ctx, data);
 
     const filter = getCategoryKey(args.getArgN(1));
-    const ownerName = String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
+    const ownerName = getRegisteredName(ctx);
     const lines = [
       '🎒【' + ownerName + '的背包】',
       '❤️ HP：' + data.hp + ' / ' + data.maxHp,
