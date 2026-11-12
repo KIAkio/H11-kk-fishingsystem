@@ -9,7 +9,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_gathering_system';
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.2';
   const DATA_VAR = '$m地精背包数据';
 
   if (seal.ext.find(EXT_ID)) {
@@ -185,6 +185,8 @@
     }
     reply(ctx, msg, lines.join('\n'));
   });
+
+  seal.ext.register(ext);
 
   console.log('[地精采集] v' + VERSION + ' 已加载，共 ' + ITEMS.length + ' 种素材。');
 })();
