@@ -17,25 +17,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Read package version
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' gathering-sealpack/info.toml | head -n 1)"
+          test -n "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Validate and pack
         run: |
           npx --yes sealpack@0.1.2 validate gathering-sealpack
           mkdir -p dist
           npx --yes sealpack@0.1.2 pack gathering-sealpack --out dist/goblin-gathering.sealpack
-      - name: Commit stable URL package
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dist/goblin-gathering.sealpack
-          if git diff --cached --quiet; then
-            echo "No package changes."
-          else
-            git commit -m "Build goblin-gathering.sealpack"
-            git push
-          fi
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: goblin-gathering-v${{ env.VERSION }}
+          name: 地精采集系统 v${{ env.VERSION }}
+          target_commitish: main
+          make_latest: true
+          generate_release_notes: true
+          files: dist/goblin-gathering.sealpack
