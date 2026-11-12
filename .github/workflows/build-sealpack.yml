@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -17,19 +15,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Read package version
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' sealpack/info.toml | head -n 1)"
+          test -n "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "SEALPACK_FILE=goblin-backpack-$VERSION.sealpack" >> "$GITHUB_ENV"
+
       - name: Validate and pack Sealpack
         run: |
           npx --yes sealpack@0.1.2 validate sealpack
           mkdir -p dist
-          npx --yes sealpack@0.1.2 pack sealpack --out dist/goblin-backpack-1.1.0.sealpack
+          npx --yes sealpack@0.1.2 pack sealpack --out "dist/$SEALPACK_FILE"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: 地精背包核心 v1.1.0
+          tag_name: v${{ env.VERSION }}
+          name: 地精背包核心 v${{ env.VERSION }}
           generate_release_notes: true
-          files: dist/goblin-backpack-1.1.0.sealpack
+          files: dist/${{ env.SEALPACK_FILE }}
