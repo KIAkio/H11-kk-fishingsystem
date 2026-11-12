@@ -34,6 +34,7 @@ jobs:
           npx --yes sealpack@0.1.2 validate sealpack
           mkdir -p dist
           npx --yes sealpack@0.1.2 pack sealpack --out "dist/$SEALPACK_FILE"
+          cp "dist/$SEALPACK_FILE" dist/goblin-backpack.sealpack
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -41,4 +42,6 @@ jobs:
           tag_name: v${{ env.VERSION }}
           name: 地精背包核心 v${{ env.VERSION }}
           generate_release_notes: true
-          files: dist/${{ env.SEALPACK_FILE }}
+          files: |
+            dist/${{ env.SEALPACK_FILE }}
+            dist/goblin-backpack.sealpack
