@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
 
@@ -19,6 +19,8 @@
     fish: '鱼类',
     mushroom: '蘑菇',
     berry: '浆果',
+    supplies: '日用品',
+    equipment: '训练装备',
     other: '其他'
   };
 
@@ -70,14 +72,16 @@
 
   function createDefaultData() {
     return {
-      version: 1,
+      version: 2,
       hp: DEFAULT_HP,
       maxHp: DEFAULT_HP,
       items: {
         fish: {},
         mushroom: {},
         berry: {},
-        other: {}
+        supplies: {},
+      equipment: {},
+      other: {}
       }
     };
   }
@@ -95,6 +99,8 @@
     base.maxHp = Number.isFinite(maxHp)
       ? Math.max(1, Math.min(999, maxHp))
       : DEFAULT_HP;
+
+    base.version = 2;
 
     if (data.items && typeof data.items === 'object') {
       for (const key of Object.keys(CATEGORY)) {
@@ -141,6 +147,8 @@
     if (value === '蘑菇类') return 'mushroom';
     if (value === '浆果类') return 'berry';
     if (value === '鱼') return 'fish';
+    if (value === '生活用品') return 'supplies';
+    if (value === '装备' || value === '工具') return 'equipment';
     return '';
   }
 
@@ -211,7 +219,9 @@
     return entries.map(([name, item]) => {
       const effect = ITEM_EFFECTS[name];
       const mark = effect ? ' ☠️' : '';
-      return '• ' + name + ' ×' + item.count + mark;
+      const durability = Number.isFinite(Number(item.durability)) ? ' [耐久 ' + item.durability + ']' : '';
+      const equipped = item.equipped ? ' [已装备]' : '';
+      return '• ' + name + ' ×' + item.count + mark + durability + equipped;
     }).join('\n');
   }
 
@@ -325,8 +335,8 @@
   // 给后续模块的共享协议说明：
   // 读取：const [raw] = seal.vars.strGet(ctx, '$m地精背包数据');
   // 写入：seal.vars.strSet(ctx, '$m地精背包数据', JSON.stringify(data));
-  // 分类键固定为 fish / mushroom / berry / other。
-  // 每项格式：{ count: 数量, description: 描述 }。
+  // 分类键固定为 fish / mushroom / berry / supplies / equipment / other。
+  // 每项格式：{ count, description, consumable, durability, equipped }。
   seal.ext.register(ext);
 
   console.log('[地精背包] v' + VERSION + ' 已加载。共享个人变量：' + DATA_VAR);
