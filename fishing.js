@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.1.0
+// @version      3.2.0
 // @description  80种鱼类、稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.1.0');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.2.0');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -240,6 +240,49 @@
         );
     }
 
+    // 将钓获同步写入「地精背包核心」的个人变量，保证跨群共享。
+    // 钓鱼系统自己的存档仍保留，用于图鉴、重量、经验和排行榜。
+    function addFishToSharedBackpack(ctx, fish) {
+        if (!seal.vars ||
+            typeof seal.vars.strGet !== 'function' ||
+            typeof seal.vars.strSet !== 'function') {
+            throw new Error('无法访问共享背包变量，请确认已安装并启用「地精背包核心」。');
+        }
+
+        const variableName = '$m地精背包数据';
+        const result = seal.vars.strGet(ctx, variableName);
+        const raw = Array.isArray(result) ? result[0] : '';
+        let data;
+
+        if (raw) {
+            try {
+                data = JSON.parse(raw);
+            } catch (e) {
+                throw new Error('共享背包存档无法解析，未能同步本次鱼获。');
+            }
+        } else {
+            data = {};
+        }
+
+        if (!data.items || typeof data.items !== 'object') data.items = {};
+        if (!data.items.fish || typeof data.items.fish !== 'object') {
+            data.items.fish = {};
+        }
+
+        const item = data.items.fish[fish.name] || {
+            count: 0,
+            description: fish.location + ' · ' + RARITY[fish.rarity].name
+        };
+        item.count = Math.max(0, Number(item.count) || 0) + 1;
+        if (!item.description) {
+            item.description = fish.location + ' · ' + RARITY[fish.rarity].name;
+        }
+        data.items.fish[fish.name] = item;
+        data.version = 2;
+
+        seal.vars.strSet(ctx, variableName, JSON.stringify(data));
+    }
+
     // 钓鱼结算
     function catchFish(player, fish) {
         const rarity = RARITY[fish.rarity];
@@ -367,6 +410,8 @@
 
                     const result = catchFish(player, fish);
 
+                    // 同步到跨群共享背包；旧钓鱼存档继续保留图鉴和排行榜。
+                    addFishToSharedBackpack(ctx, fish);
                     saveData(data);
 
                     seal.replyToSender(
