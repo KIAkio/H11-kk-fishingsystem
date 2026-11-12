@@ -10,9 +10,10 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
+  const GROUP_PROFILE_VAR = '$g地精档案编号表';
 
   // 物品分类名称。其他玩法接入时也使用这些分类键。
   const CATEGORY = {
@@ -153,6 +154,47 @@
     seal.vars.strSet(ctx, DATA_VAR, JSON.stringify(normalizeData(data)));
   }
 
+
+  function getPlayerId(ctx) {
+    return String(ctx.player && (ctx.player.userId || ctx.player.id) || '').trim();
+  }
+
+  function loadGroupProfiles(ctx) {
+    if (!seal.vars || typeof seal.vars.strGet !== 'function') {
+      throw new Error('当前海豹核心不支持群变量存档。');
+    }
+    const result = seal.vars.strGet(ctx, GROUP_PROFILE_VAR);
+    const raw = Array.isArray(result) ? result[0] : '';
+    if (!raw) return { nextId: 0, members: {} };
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        nextId: Math.max(0, Number(parsed.nextId) || 0),
+        members: parsed.members && typeof parsed.members === 'object' ? parsed.members : {}
+      };
+    } catch (e) {
+      console.log('[地精背包] 群档案编号表损坏：' + e);
+      return { nextId: 0, members: {} };
+    }
+  }
+
+  function saveGroupProfiles(ctx, data) {
+    seal.vars.strSet(ctx, GROUP_PROFILE_VAR, JSON.stringify(data));
+  }
+
+  function getOrCreateGroupProfile(ctx) {
+    const userId = getPlayerId(ctx);
+    if (!userId) throw new Error('无法读取你的平台用户 ID。');
+    const profiles = loadGroupProfiles(ctx);
+    if (profiles.members[userId]) return { id: profiles.members[userId], created: false };
+
+    const id = String(profiles.nextId).padStart(3, '0');
+    profiles.members[userId] = id;
+    profiles.nextId += 1;
+    saveGroupProfiles(ctx, profiles);
+    return { id, created: true };
+  }
+
   function getCategoryKey(input) {
     const value = String(input || '').trim();
     if (!value) return '';
@@ -240,6 +282,23 @@
     }).join('\n');
   }
 
+
+  registerCommand('注册', '建立档案：.注册', (ctx, msg) => {
+    const profile = getOrCreateGroupProfile(ctx);
+    const data = loadData(ctx);
+    saveData(ctx, data);
+    const name = String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
+    reply(ctx, msg,
+      '📋【' + name + '的档案】\\n' +
+      'ID：' + profile.id + '\\n' +
+      '❤️ HP：' + data.hp + ' / ' + data.maxHp + '\\n' +
+      '⭐ 等级：1\\n' +
+      '✨ 经验：0\\n' +
+      '🎒 背包：' + (Object.values(data.items).reduce((n, group) => n + Object.values(group).reduce((s, item) => s + (Number(item.count) || 0), 0), 0) || '空') + '\\n\\n' +
+      'BUGx1：一只小蜘蛛....你怎么在这儿？'
+    );
+  });
+
   registerCommand('背包', '查看背包：.背包 / .背包 鱼类、蘑菇、浆果、日用品、训练装备、其他', (ctx, msg, args) => {
     const data = loadData(ctx);
     saveData(ctx, data);
@@ -304,6 +363,18 @@
     const targetName = String(targetCtx.player.name || '玩家');
     reply(ctx, msg, '🎁 已向「' + targetName + '」发放：' + itemName + ' ×' + amount +
       '\n对方当前持有：' + newCount + ' 件');
+  });
+
+
+  registerCommand('重置所有背包', '重置自己的全部背包物品与 HP：.重置所有背包 确认', (ctx, msg, args) => {
+    const confirm = String(args.getArgN(1) || '').trim();
+    if (confirm !== '确认') {
+      reply(ctx, msg, '⚠️ 此操作会清空你在所有群共享的背包物品，并将 HP 恢复为 10。\\n如确定重置，请输入：.重置所有背包 确认');
+      return;
+    }
+    const fresh = createDefaultData();
+    saveData(ctx, fresh);
+    reply(ctx, msg, '🧹 已重置你的全部背包：物品已清空，HP 已恢复为 10 / 10。\\n档案编号不会改变。');
   });
 
   registerCommand('状态', '查看生命值：.状态', (ctx, msg) => {
@@ -387,7 +458,7 @@
   // 给后续模块的共享协议说明：
   // 读取：const [raw] = seal.vars.strGet(ctx, '$m地精背包数据');
   // 写入：seal.vars.strSet(ctx, '$m地精背包数据', JSON.stringify(data));
-  // 分类键固定为 fish / mushroom / berry / supplies / equipment / other。
+  // 群档案编号使用 $g 变量：每个群从 000 独立递增；背包物品使用 $m 变量：跨群同步。\n  // 分类键固定为 fish / mushroom / berry / supplies / equipment / other。
   // 每项格式：{ count, description, consumable, durability, equipped }。
   seal.ext.register(ext);
 
