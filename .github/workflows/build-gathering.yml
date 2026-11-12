@@ -1,0 +1,41 @@
+name: Build Goblin Gathering Sealpack
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gathering-sealpack/**'
+      - '.github/workflows/build-gathering.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate and pack
+        run: |
+          npx --yes sealpack@0.1.2 validate gathering-sealpack
+          mkdir -p dist
+          npx --yes sealpack@0.1.2 pack gathering-sealpack --out dist/goblin-gathering.sealpack
+      - name: Commit stable URL package
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/goblin-gathering.sealpack
+          if git diff --cached --quiet; then
+            echo "No package changes."
+          else
+            git commit -m "Build goblin-gathering.sealpack"
+            git push
+          fi
