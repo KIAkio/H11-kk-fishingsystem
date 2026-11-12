@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.0.0
-// @description  统一物品背包与生命值系统，供钓鱼和地精采集系统共用
+// @version      1.1.0
+// @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
 
@@ -50,6 +50,21 @@
       '沙棘',
       '野玫瑰果',
       '蔓越莓'
+    ],
+    supplies: [
+      '止血带',
+      '保温毯',
+      '急救包',
+      '水壶',
+      '手套',
+      '口哨'
+    ],
+    equipment: [
+      '折叠刀',
+      '望远镜',
+      '手电筒',
+      '头灯',
+      '指南针'
     ]
   };
 
@@ -80,8 +95,8 @@
         mushroom: {},
         berry: {},
         supplies: {},
-      equipment: {},
-      other: {}
+        equipment: {},
+        other: {}
       }
     };
   }
@@ -225,7 +240,7 @@
     }).join('\n');
   }
 
-  registerCommand('背包', '查看背包：.背包 / .背包 鱼类、蘑菇、浆果、其他', (ctx, msg, args) => {
+  registerCommand('背包', '查看背包：.背包 / .背包 鱼类、蘑菇、浆果、日用品、训练装备、其他', (ctx, msg, args) => {
     const data = loadData(ctx);
     saveData(ctx, data);
 
