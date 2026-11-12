@@ -242,7 +242,7 @@
 
     // 将钓获同步写入「地精背包核心」的个人变量，保证跨群共享。
     // 钓鱼系统自己的存档仍保留，用于图鉴、重量、经验和排行榜。
-    function addFishToSharedBackpack(ctx, fish) {
+    function addFishToSharedBackpack(ctx, player, caughtFish) {
         if (!seal.vars ||
             typeof seal.vars.strGet !== 'function' ||
             typeof seal.vars.strSet !== 'function') {
@@ -269,17 +269,37 @@
             data.items.fish = {};
         }
 
-        const item = data.items.fish[fish.name] || {
-            count: 0,
-            description: fish.location + ' · ' + RARITY[fish.rarity].name
-        };
-        item.count = Math.max(0, Number(item.count) || 0) + 1;
-        if (!item.description) {
-            item.description = fish.location + ' · ' + RARITY[fish.rarity].name;
+        function addOneFish(fishName, count, description) {
+            const amount = Math.max(0, Math.floor(Number(count) || 0));
+            if (!fishName || amount < 1) return;
+            const item = data.items.fish[fishName] || {
+                count: 0,
+                description: description || '钓鱼获得'
+            };
+            item.count = Math.max(0, Number(item.count) || 0) + amount;
+            if (!item.description) item.description = description || '钓鱼获得';
+            data.items.fish[fishName] = item;
         }
-        data.items.fish[fish.name] = item;
-        data.version = 2;
 
+        // 第一次接入时，将该群旧钓鱼背包中的历史鱼获迁移一次。
+        if (!player.sharedBackpackMigrated) {
+            for (const oldFish of Object.values(player.bag || {})) {
+                addOneFish(
+                    oldFish.name,
+                    oldFish.count,
+                    (oldFish.location || '未知水域') + ' · ' + (oldFish.rarity || '鱼类')
+                );
+            }
+            player.sharedBackpackMigrated = true;
+        } else {
+            addOneFish(
+                caughtFish.name,
+                1,
+                caughtFish.location + ' · ' + RARITY[caughtFish.rarity].name
+            );
+        }
+
+        data.version = 2;
         seal.vars.strSet(ctx, variableName, JSON.stringify(data));
     }
 
@@ -411,7 +431,7 @@
                     const result = catchFish(player, fish);
 
                     // 同步到跨群共享背包；旧钓鱼存档继续保留图鉴和排行榜。
-                    addFishToSharedBackpack(ctx, fish);
+                    addFishToSharedBackpack(ctx, player, fish);
                     saveData(data);
 
                     seal.replyToSender(
