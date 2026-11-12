@@ -24,7 +24,7 @@ jobs:
       - name: Read package version
         shell: bash
         run: |
-          VERSION="$(awk '/^\\[package\\]/{in_package=1;next} /^\\[/{in_package=0} in_package && /^version =/{gsub(/[" ]/, "", $3); print $3; exit}' gathering-sealpack/info.toml)"
+          VERSION="$(grep -A 8 '^\[package\]' gathering-sealpack/info.toml | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)"
           test -n "$VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Validate and pack
