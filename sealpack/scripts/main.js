@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
 
@@ -245,8 +245,9 @@
     saveData(ctx, data);
 
     const filter = getCategoryKey(args.getArgN(1));
+    const ownerName = String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
     const lines = [
-      '🎒【冒险者背包】',
+      '🎒【' + ownerName + '的背包】',
       '❤️ HP：' + data.hp + ' / ' + data.maxHp,
       ''
     ];
@@ -267,6 +268,42 @@
     lines.push('物品种类：' + totalKinds + ' 种');
     lines.push('物品总数：' + totalCount + ' 件');
     reply(ctx, msg, lines.join('\n'));
+  });
+
+
+  registerCommand('发放', '管理员发放物品：.发放 @玩家 分类 物品名 数量', (ctx, msg, args) => {
+    if (Number(ctx.privilegeLevel) < 50) {
+      reply(ctx, msg, '只有群管理员、群主或骰主可以发放物品。');
+      return;
+    }
+
+    const targetCtx = seal.getCtxProxyFirst(ctx, args);
+    if (!targetCtx || !targetCtx.player || !targetCtx.player.userId) {
+      reply(ctx, msg, '请先 @ 一位玩家。格式：.发放 @玩家 日用品 止血带 1');
+      return;
+    }
+
+    const category = getCategoryKey(args.getArgN(1));
+    const itemName = String(args.getArgN(2) || '').trim();
+    const amountText = String(args.getArgN(3) || '1').trim();
+    const amount = Math.floor(Number(amountText));
+
+    if (!category || !itemName) {
+      reply(ctx, msg, '格式：.发放 @玩家 分类 物品名 数量\n分类：鱼类、蘑菇、浆果、日用品、训练装备、其他');
+      return;
+    }
+    if (!Number.isFinite(amount) || amount < 1 || amount > 9999) {
+      reply(ctx, msg, '发放数量必须为 1 至 9999 的整数。');
+      return;
+    }
+
+    const targetData = loadData(targetCtx);
+    const newCount = addItem(targetData, category, itemName, amount, '');
+    saveData(targetCtx, targetData);
+
+    const targetName = String(targetCtx.player.name || '玩家');
+    reply(ctx, msg, '🎁 已向「' + targetName + '」发放：' + itemName + ' ×' + amount +
+      '\n对方当前持有：' + newCount + ' 件');
   });
 
   registerCommand('状态', '查看生命值：.状态', (ctx, msg) => {
