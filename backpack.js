@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.1.0
+// @version      1.4.0
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -289,12 +289,12 @@
     saveData(ctx, data);
     const name = String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
     reply(ctx, msg,
-      '📋【' + name + '的档案】\\n' +
-      'ID：' + profile.id + '\\n' +
-      '❤️ HP：' + data.hp + ' / ' + data.maxHp + '\\n' +
-      '⭐ 等级：1\\n' +
-      '✨ 经验：0\\n' +
-      '🎒 背包：' + (Object.values(data.items).reduce((n, group) => n + Object.values(group).reduce((s, item) => s + (Number(item.count) || 0), 0), 0) || '空') + '\\n\\n' +
+      '📋【' + name + '的档案】\n' +
+      'ID：' + profile.id + '\n' +
+      '❤️ HP：' + data.hp + ' / ' + data.maxHp + '\n' +
+      '⭐ 等级：1\n' +
+      '✨ 经验：0\n' +
+      '🎒 背包：' + (Object.values(data.items).reduce((n, group) => n + Object.values(group).reduce((s, item) => s + (Number(item.count) || 0), 0), 0) || '空') + '\n\n' +
       'BUGx1：一只小蜘蛛....你怎么在这儿？'
     );
   });
@@ -369,12 +369,12 @@
   registerCommand('重置所有背包', '重置自己的全部背包物品与 HP：.重置所有背包 确认', (ctx, msg, args) => {
     const confirm = String(args.getArgN(1) || '').trim();
     if (confirm !== '确认') {
-      reply(ctx, msg, '⚠️ 此操作会清空你在所有群共享的背包物品，并将 HP 恢复为 10。\\n如确定重置，请输入：.重置所有背包 确认');
+      reply(ctx, msg, '⚠️ 此操作会清空你在所有群共享的背包物品，并将 HP 恢复为 10。\n如确定重置，请输入：.重置所有背包 确认');
       return;
     }
     const fresh = createDefaultData();
     saveData(ctx, fresh);
-    reply(ctx, msg, '🧹 已重置你的全部背包：物品已清空，HP 已恢复为 10 / 10。\\n档案编号不会改变。');
+    reply(ctx, msg, '🧹 已重置你的全部背包：物品已清空，HP 已恢复为 10 / 10。\n档案编号不会改变。');
   });
 
   registerCommand('状态', '查看生命值：.状态', (ctx, msg) => {
