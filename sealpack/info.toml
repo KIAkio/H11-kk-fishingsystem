@@ -1,0 +1,36 @@
+format_version = "1.0.0"
+
+[package]
+id = "kiakio/goblin-backpack"
+name = "地精背包核心"
+version = "1.1.0"
+authors = ["KIAkio"]
+license = "All Rights Reserved"
+description = "冬训营采集与钓鱼玩法共用的玩家背包、物资和生命值核心"
+keywords = ["sealdice", "backpack", "goblin", "camp"]
+
+[package.seal]
+min_version = "1.6.0"
+
+[dependencies]
+
+[permissions]
+network = false
+file_read = []
+file_write = []
+
+[contents]
+scripts = ["scripts/*.js"]
+decks = []
+reply = []
+helpdoc = []
+templates = []
+
+[store]
+readme = "README.md"
+icon = ""
+banner = ""
+screenshots = []
+category = "tool"
+
+[config]
