@@ -368,12 +368,10 @@
     '.查看背包 — 查看钓鱼模块记录的鱼类',
     '.钓鱼排行 — 查看钓鱼排行',
     '【查询帮助】',
-    '.H11 — 查看本表',
-    '.help — 查看本表（若被 SealDice 内置帮助占用，请用 .H11）',
+    '.指令H11 — 查看本表',
     '注：部分指令需要安装并启用对应的扩展。'
   ].join('\n');
-  registerCommand('H11', '查看 H11 全部玩法指令：.H11', (ctx, msg) => reply(ctx, msg, H11_HELP));
-  registerCommand('help', '查看 H11 全部玩法指令：.help', (ctx, msg) => reply(ctx, msg, H11_HELP));
+  registerCommand('指令H11', '查看 H11 全部玩法指令：.指令H11', (ctx, msg) => reply(ctx, msg, H11_HELP));
 
   registerCommand('注册', '建立档案：.注册 姓名', (ctx, msg, args) => {
     const requestedName = String(args.getArgN(1) || '').trim();
