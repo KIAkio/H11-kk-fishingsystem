@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.4.0';
+  const VERSION = '1.5.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -116,7 +116,7 @@
       ? Math.max(1, Math.min(999, maxHp))
       : DEFAULT_HP;
 
-    base.version = 2;
+    base.version = 3;\n    base.hunger = Number.isFinite(Number(data.hunger)) ? Math.max(0, Math.min(4, Number(data.hunger))) : 4;\n    base.hungerUpdatedAt = Number.isFinite(Number(data.hungerUpdatedAt)) ? Number(data.hungerUpdatedAt) : Date.now();
 
     if (data.items && typeof data.items === 'object') {
       for (const key of Object.keys(CATEGORY)) {
@@ -333,10 +333,24 @@
       ''
     ];
 
-    const keys = filter ? [filter] : Object.keys(CATEGORY);
+    const keys = filter ? [filter] : ['supplies', 'equipment', 'fish', 'mushroom', 'berry', 'other'];
+    const emptyCategories = [];
     for (const key of keys) {
+      const rendered = renderCategory(data, key);
+      if (rendered === '（空）') {
+        emptyCategories.push(CATEGORY[key]);
+        continue;
+      }
       lines.push('【' + CATEGORY[key] + '】');
-      lines.push(renderCategory(data, key));
+      lines.push(rendered);
+      lines.push('');
+    }
+    if (!filter && emptyCategories.length) {
+      lines.push('当前空置类别：' + emptyCategories.join('/'));
+      lines.push('');
+    } else if (filter && emptyCategories.length) {
+      lines.push('【' + CATEGORY[filter] + '】');
+      lines.push('（空）');
       lines.push('');
     }
 
