@@ -29,6 +29,9 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "SEALPACK_FILE=goblin-backpack-$VERSION.sealpack" >> "$GITHUB_ENV"
 
+      - name: JavaScript syntax check
+        run: node --check sealpack/scripts/main.js
+
       - name: Validate and pack Sealpack
         run: |
           npx --yes sealpack@0.1.2 validate sealpack
