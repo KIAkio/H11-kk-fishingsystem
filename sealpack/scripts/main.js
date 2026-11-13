@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.5.1
+// @version      1.5.2
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -133,6 +133,40 @@
     return base;
   }
 
+  function applyLifeTicks(data) {
+    const now = Date.now();
+    if (!Number.isFinite(Number(data.hunger))) data.hunger = 4;
+    if (!Number.isFinite(Number(data.hungerUpdatedAt))) data.hungerUpdatedAt = now;
+    const start = Number(data.hungerUpdatedAt);
+    if (start > now) {
+      data.hungerUpdatedAt = now;
+      return data;
+    }
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date(start));
+    const y = Number(parts.find(x => x.type === 'year').value);
+    const m = Number(parts.find(x => x.type === 'month').value);
+    const d = Number(parts.find(x => x.type === 'day').value);
+    for (let offset = 0; offset <= 370; offset++) {
+      const date = new Date(Date.UTC(y, m - 1, d + offset));
+      for (const hour of [5, 10, 15, 20]) {
+        const timestamp = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), hour - 8);
+        if (timestamp > start && timestamp <= now) {
+          data.hunger = hour === 5 ? 1 : Math.max(0, Number(data.hunger) - 1);
+        }
+      }
+    }
+    data.hunger = Math.max(0, Math.min(4, Number(data.hunger)));
+    data.hungerUpdatedAt = now;
+    for (const [name, item] of Object.entries(data.items.other || {})) {
+      if (item && item.campBreakfast && Number(item.expiresAt) > 0 && Number(item.expiresAt) <= now) {
+        delete data.items.other[name];
+      }
+    }
+    return data;
+  }
+
   // 使用海豹个人变量 $m 保存数据：同一玩家跨群共享，也能被其他 JS 插件读取。
   function loadData(ctx) {
     if (!seal.vars || typeof seal.vars.strGet !== 'function') {
@@ -144,7 +178,7 @@
     if (!raw) return createDefaultData();
 
     try {
-      return normalizeData(JSON.parse(raw));
+      return applyLifeTicks(normalizeData(JSON.parse(raw)));
     } catch (e) {
       console.log('[地精背包] 存档解析失败：' + e);
       return createDefaultData();
