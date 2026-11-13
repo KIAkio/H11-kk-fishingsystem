@@ -371,7 +371,7 @@
     '.H11 — 查看本表',
     '.help — 查看本表（若被 SealDice 内置帮助占用，请用 .H11）',
     '注：部分指令需要安装并启用对应的扩展。'
-  ].join('\\n');
+  ].join('\n');
   registerCommand('H11', '查看 H11 全部玩法指令：.H11', (ctx, msg) => reply(ctx, msg, H11_HELP));
   registerCommand('help', '查看 H11 全部玩法指令：.help', (ctx, msg) => reply(ctx, msg, H11_HELP));
 
