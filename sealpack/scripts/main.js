@@ -377,7 +377,7 @@
   // 其他玩法指令应在海豹核心的“指令前缀”中统一添加中文标点。
   ext.onNotCommandReceived = (ctx, msg) => {
     const input = String((msg && msg.message) || '').trim();
-    if (/^[。，]指令H11\\s*$/i.test(input)) reply(ctx, msg, H11_HELP);
+    if (/^[。，]指令H11\s*$/i.test(input)) reply(ctx, msg, H11_HELP);
   };
 
   registerCommand('注册', '建立档案：.注册 姓名', (ctx, msg, args) => {
