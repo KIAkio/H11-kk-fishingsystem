@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.5.3
+// @version      1.5.4
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.5.0';
+  const VERSION = '1.5.4';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -368,10 +368,17 @@
     '.查看背包 — 查看钓鱼模块记录的鱼类',
     '.钓鱼排行 — 查看钓鱼排行',
     '【查询帮助】',
-    '.指令H11 — 查看本表',
+    '.指令H11 / 。指令H11 / ，指令H11 — 查看本表',
     '注：部分指令需要安装并启用对应的扩展。'
   ].join('\n');
   registerCommand('指令H11', '查看 H11 全部玩法指令：.指令H11', (ctx, msg) => reply(ctx, msg, H11_HELP));
+
+  // 中文标点兼容：当海豹核心尚未配置中文前缀时，仍可查询 H11。
+  // 其他玩法指令应在海豹核心的“指令前缀”中统一添加中文标点。
+  ext.onNotCommandReceived = (ctx, msg) => {
+    const input = String((msg && msg.message) || '').trim();
+    if (/^[。，]指令H11\\s*$/i.test(input)) reply(ctx, msg, H11_HELP);
+  };
 
   registerCommand('注册', '建立档案：.注册 姓名', (ctx, msg, args) => {
     const requestedName = String(args.getArgN(1) || '').trim();
