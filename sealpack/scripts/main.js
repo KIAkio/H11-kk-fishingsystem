@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.5.2
+// @version      1.5.3
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -462,33 +462,57 @@
       '\\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4');
   });
 
-  registerCommand('食用', '食用背包中的可食用物品：.食用 物品名', (ctx, msg, args) => {
-    const name = String(args.getArgN(1) || '').trim();
-    if (!name) {
-      reply(ctx, msg, '请指定要食用的物品，例如：.食用 红菇属');
+  registerCommand('食用', '食用背包中的食物：.食用 食物名称（营地早餐可省略前缀）', (ctx, msg, args) => {
+    const requested = String(args.getArgN(1) || '').trim();
+    if (!requested) {
+      reply(ctx, msg, '请指定要食用的物品，例如：.食用 燕麦粥');
       return;
     }
-
     const data = loadData(ctx);
-    const effect = ITEM_EFFECTS[name];
-
-    if (!effect) {
-      reply(ctx, msg, '目前没有为「' + name + '」设置食用效果，暂时不能食用。');
+    const candidates = requested.startsWith('营地早餐：')
+      ? [requested]
+      : [requested, '营地早餐：' + requested];
+    let foundCategory = '';
+    let foundName = '';
+    let item = null;
+    for (const candidate of candidates) {
+      for (const key of Object.keys(CATEGORY)) {
+        if (data.items[key][candidate] && Number(data.items[key][candidate].count) > 0) {
+          foundCategory = key;
+          foundName = candidate;
+          item = data.items[key][candidate];
+          break;
+        }
+      }
+      if (item) break;
+    }
+    const effect = ITEM_EFFECTS[requested] || ITEM_EFFECTS[foundName];
+    if (!item) {
+      reply(ctx, msg, '背包里没有「' + requested + '」。');
       return;
     }
-
-    if (getItemCount(data, 'mushroom', name) < 1) {
-      reply(ctx, msg, '背包里没有「' + name + '」。');
+    if (!effect && !item.campBreakfast && !Number.isFinite(Number(item.hungerRestore))) {
+      reply(ctx, msg, '目前没有为「' + requested + '」设置食用效果，暂时不能食用。');
       return;
     }
-
-    removeItem(data, 'mushroom', name, 1);
     const oldHp = data.hp;
-    data.hp = Math.max(0, Math.min(data.maxHp, data.hp + effect.hp));
+    const oldHunger = Number(data.hunger) || 0;
+    removeItem(data, foundCategory, foundName, 1);
+    if (effect) {
+      data.hp = Math.max(0, Math.min(data.maxHp, data.hp + Number(effect.hp || 0)));
+    } else {
+      data.hp = Math.max(0, Math.min(data.maxHp, data.hp + (Number(item.hpRestore) || 1)));
+      data.hunger = Math.min(4, Math.max(0, oldHunger + (Number(item.hungerRestore) || (item.campBreakfast ? 3 : 0))));
+    }
     saveData(ctx, data);
-
-    reply(ctx, msg, '☠️ 你食用了「' + name + '」。\n' +
-      effect.description + '\nHP：' + oldHp + ' → ' + data.hp + ' / ' + data.maxHp);
+    if (effect) {
+      reply(ctx, msg, '☠️ 你食用了「' + foundName + '」。\\n' + effect.description +
+        '\\nHP：' + oldHp + ' → ' + data.hp + ' / ' + data.maxHp);
+    } else {
+      reply(ctx, msg, '🍽️ 你食用了「' + foundName + '」。\\n❤️ HP：' + oldHp +
+        ' → ' + data.hp + ' / ' + data.maxHp + '\\n饱腹值：' + oldHunger +
+        ' → ' + data.hunger + ' / 4');
+    }
   });
 
   registerCommand('丢弃', '丢弃背包物品：.丢弃 物品名 [数量]', (ctx, msg, args) => {
