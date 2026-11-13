@@ -72,7 +72,7 @@ cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2�
    if(participants.length===2)d.hunger=Math.min(4,Math.max(0,(Number(d.hunger)||0)+1));
    save(states[i].participant.ctx,d);
  }
- reply(c,m,'量不大，不过每人啃一口也还不错？\\n\\n「'+foodName+'」已由 '+participants.map(x=>x.name).join('、')+' 一起分享。'+(participants.length===2?'\\n每人饱腹值 +1，HP +1。':'\\n每人 HP +1，饱腹值没有变化。'));
+ reply(c,m,'量不大，不过每人啃一口也还不错？\n\n「'+foodName+'」已由 '+participants.map(x=>x.name).join('、')+' 一起分享。'+(participants.length===2?'\n每人饱腹值 +1，HP +1。':'\n每人 HP +1，饱腹值没有变化。'));
 });
 seal.ext.register(ext);console.log('[冬训营生活] v'+VER+' 已加载。');
 })();
