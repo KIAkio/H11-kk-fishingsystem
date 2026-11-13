@@ -1,0 +1,43 @@
+name: Build Winter Camp Life Sealpack
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'camp-life-sealpack/**'
+      - '.github/workflows/build-camp-life.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Read package version
+        shell: bash
+        run: |
+          VERSION="$(grep -A 8 '^\[package\]' camp-life-sealpack/info.toml | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)"
+          test -n "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Validate and pack
+        run: |
+          npx --yes sealpack@0.1.2 validate camp-life-sealpack
+          mkdir -p dist
+          npx --yes sealpack@0.1.2 pack camp-life-sealpack --out dist/winter-camp-life.sealpack
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: winter-camp-life-v${{ env.VERSION }}
+          name: 冬训营生活系统 v${{ env.VERSION }}
+          target_commitish: main
+          make_latest: false
+          generate_release_notes: true
+          files: dist/winter-camp-life.sealpack
