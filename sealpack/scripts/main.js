@@ -118,7 +118,9 @@
       ? Math.max(1, Math.min(999, maxHp))
       : DEFAULT_HP;
 
-    base.version = 3;\n    base.hunger = Number.isFinite(Number(data.hunger)) ? Math.max(0, Math.min(4, Number(data.hunger))) : 4;\n    base.hungerUpdatedAt = Number.isFinite(Number(data.hungerUpdatedAt)) ? Number(data.hungerUpdatedAt) : Date.now();
+    base.version = 3;
+    base.hunger = Number.isFinite(Number(data.hunger)) ? Math.max(0, Math.min(4, Number(data.hunger))) : 4;
+    base.hungerUpdatedAt = Number.isFinite(Number(data.hungerUpdatedAt)) ? Number(data.hungerUpdatedAt) : Date.now();
 
     if (data.items && typeof data.items === 'object') {
       for (const key of Object.keys(CATEGORY)) {
@@ -415,13 +417,15 @@
     reply(ctx, msg, '🧹 已重置你的全部背包：物品已清空，HP 已恢复为 10 / 10。\n档案编号不会改变。');
   });
 
-  registerCommand('状态', '查看生命值：.状态', (ctx, msg) => {
+  registerCommand('状态', '查看生命值与饱腹值：.状态', (ctx, msg) => {
     const data = loadData(ctx);
     saveData(ctx, data);
     const hearts = '❤️'.repeat(Math.min(data.hp, 20)) +
       '🖤'.repeat(Math.min(Math.max(0, data.maxHp - data.hp), 20));
-    reply(ctx, msg, '【冒险者状态】\n' + hearts +
-      '\n生命值：' + data.hp + ' / ' + data.maxHp);
+    reply(ctx, msg, '【冒险者状态】\\n' + hearts +
+      '\\n生命值：' + data.hp + ' / ' + data.maxHp +
+      (Number(data.hunger) === 0 ? '\\n【饥饿】' : '') +
+      '\\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4');
   });
 
   registerCommand('食用', '食用背包中的可食用物品：.食用 物品名', (ctx, msg, args) => {
