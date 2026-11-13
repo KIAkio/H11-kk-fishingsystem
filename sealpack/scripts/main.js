@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.5.5
+// @version      1.5.6
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.5.5';
+  const VERSION = '1.5.6';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -142,12 +142,11 @@
       data.hungerUpdatedAt = now;
       return data;
     }
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
-    }).formatToParts(new Date(start));
-    const y = Number(parts.find(x => x.type === 'year').value);
-    const m = Number(parts.find(x => x.type === 'month').value);
-    const d = Number(parts.find(x => x.type === 'day').value);
+    // 北京时间固定 UTC+8，兼容不提供 Intl 的 SealDice JS 沙箱。
+    const beijingStart = new Date(start + 8 * 60 * 60 * 1000);
+    const y = beijingStart.getUTCFullYear();
+    const m = beijingStart.getUTCMonth() + 1;
+    const d = beijingStart.getUTCDate();
     for (let offset = 0; offset <= 370; offset++) {
       const date = new Date(Date.UTC(y, m - 1, d + offset));
       for (const hour of [5, 10, 15, 20]) {
