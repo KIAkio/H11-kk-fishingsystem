@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.5.4
+// @version      1.5.5
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.5.4';
+  const VERSION = '1.5.5';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -456,9 +456,12 @@
       return;
     }
 
-    const category = getCategoryKey(args.getArgN(1));
-    const itemName = String(args.getArgN(2) || '').trim();
-    const amountText = String(args.getArgN(3) || '1').trim();
+    // @目标可能占据第一个命令参数；同时兼容未计入参数的适配器。
+    const first = String(args.getArgN(1) || '').trim();
+    const offset = getCategoryKey(first) ? 0 : 1;
+    const category = getCategoryKey(args.getArgN(1 + offset));
+    const itemName = String(args.getArgN(2 + offset) || '').trim();
+    const amountText = String(args.getArgN(3 + offset) || '1').trim();
     const amount = Math.floor(Number(amountText));
 
     if (!category || !itemName) {
