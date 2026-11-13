@@ -1,0 +1,36 @@
+format_version = "1.0.0"
+
+[package]
+id = "kiakio/winter-camp-life"
+name = "冬训营生活系统"
+version = "1.0.0"
+authors = ["KIAkio"]
+license = "All Rights Reserved"
+description = "跨群每日点名、营地早餐与饱腹系统"
+keywords = ["sealdice", "winter-camp", "attendance", "food"]
+
+[package.seal]
+min_version = "1.6.0"
+
+[dependencies]
+
+[permissions]
+network = false
+file_read = []
+file_write = []
+
+[contents]
+scripts = ["scripts/*.js"]
+decks = []
+reply = []
+helpdoc = []
+templates = []
+
+[store]
+readme = "README.md"
+icon = ""
+banner = ""
+screenshots = []
+category = "game"
+
+[config]
