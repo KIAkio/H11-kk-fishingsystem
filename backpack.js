@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.4.0
+// @version      1.5.1
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -88,9 +88,11 @@
 
   function createDefaultData() {
     return {
-      version: 2,
+      version: 3,
       hp: DEFAULT_HP,
       maxHp: DEFAULT_HP,
+      hunger: 4,
+      hungerUpdatedAt: Date.now(),
       items: {
         fish: {},
         mushroom: {},
