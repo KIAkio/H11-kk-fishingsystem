@@ -27,8 +27,8 @@ function save(c,d){d.version=3;write(c,BAG,d)}
 function sync(c){const d=bag(c),now=Date.now(),start=d.hungerUpdatedAt,parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(start)),y=+parts.find(x=>x.type==='year').value,m=+parts.find(x=>x.type==='month').value,dd=+parts.find(x=>x.type==='day').value;
 for(let i=0;i<=370;i++){const dt=new Date(Date.UTC(y,m-1,dd+i));for(const h of [5,10,15,20]){const t=boundary(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate(),h);if(t>start&&t<=now)d.hunger=h===5?1:Math.max(0,d.hunger-1)}}
 d.hungerUpdatedAt=now;for(const [n,it] of Object.entries(d.items.other)){if(it&&it.campBreakfast&&+it.expiresAt>0&&+it.expiresAt<=now)delete d.items.other[n]}save(c,d);return d}
-function nextEight(){const now=new Date(),p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now),y=+p.find(x=>x.type==='year').value,m=+p.find(x=>x.type==='month').value,d=+p.find(x=>x.type==='day').value;let t=boundary(y,m,d,8);return t<=Date.now()?boundary(y,m,d+1,8):t}
-function find(d,n){for(const k of Object.keys(d.items)){if(d.items[k][n]&&+d.items[k][n].count>0)return {k,it:d.items[k][n]}}return null}
+function nextEight(){const now=new Date(),p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now),y=+p.find(x=>x.type==='year').value,m=+p.find(x=>x.type==='month').value,d=+p.find(x=>x.type==='day').value;return boundary(y,m,d+1,8)}
+function find(d,n){const names=[n,n.startsWith('营地早餐：')?n:'营地早餐：'+n];for(const name of names)for(const k of Object.keys(d.items)){if(d.items[k][name]&&+d.items[k][name].count>0)return {k,it:d.items[k][name],name}}return null}
 cmd('点名','每日点名：.点名',(c,m)=>{
 if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}
 const now=new Date();if(hour(now)>=12){reply(c,m,'呵呵..现在可不是打卡的时候...');return}
@@ -42,10 +42,10 @@ let out='今日已打卡。早上好呀同学~\n🎫累计数：'+r.count+'\n\n�
 });
 cmd('点名信息','查看点名记录：.点名信息',(c,m)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const r=read(c,ATT,{lastDate:'',count:0});reply(c,m,'🏕️【点名记录】\n累计数：'+r.count+'\n最近打卡：'+(r.lastDate||'暂无记录'))});
 cmd('点名排行','查看本群点名排行：.点名排行',(c,m)=>{const r=read(c,RANK,{members:{}}),a=Object.values(r.members).sort((x,y)=>y.count-x.count).slice(0,10);reply(c,m,'🏅【累计点名排行】\n'+(a.length?a.map((x,i)=>(i+1)+'. '+x.name+'：'+x.count+' 次').join('\n'):'暂无记录'))});
-cmd('食用','食用背包中的食物：.食用 食物名称',(c,m,a)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const n=String(a.getArgN(1)||'').trim();if(!n){reply(c,m,'请指定食物名称。');return}const d=sync(c),f=find(d,n);if(!f){reply(c,m,'背包里没有「'+n+'」。');return}if(!f.it.campBreakfast&&!Number.isFinite(Number(f.it.hungerRestore))){reply(c,m,'「'+n+'」尚未设置食用效果。');return}f.it.count--;if(f.it.count<=0)delete d.items[f.k][n];const old=d.hp;d.hp=Math.min(d.maxHp,d.hp+(Number(f.it.hpRestore)||1));d.hunger=Math.min(4,d.hunger+(Number(f.it.hungerRestore)|| (f.it.campBreakfast?3:0)));save(c,d);reply(c,m,'🍽️ 你食用了「'+n+'」。\n❤️ HP：'+old+' → '+d.hp+' / '+d.maxHp+'\n饱腹值：'+d.hunger+' / 4')});
+cmd('食用','食用背包中的食物：.食用 食物名称（可不写“营地早餐：”前缀）',(c,m,a)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const n=String(a.getArgN(1)||'').trim();if(!n){reply(c,m,'请指定食物名称。');return}const d=sync(c),f=find(d,n);if(!f){reply(c,m,'背包里没有「'+n+'」。');return}if(!f.it.campBreakfast&&!Number.isFinite(Number(f.it.hungerRestore))){reply(c,m,'「'+n+'」尚未设置食用效果。');return}f.it.count--;if(f.it.count<=0)delete d.items[f.k][f.name];const old=d.hp;d.hp=Math.min(d.maxHp,d.hp+(Number(f.it.hpRestore)||1));d.hunger=Math.min(4,d.hunger+(Number(f.it.hungerRestore)|| (f.it.campBreakfast?3:0)));save(c,d);reply(c,m,'🍽️ 你食用了「'+n+'」。\n❤️ HP：'+old+' → '+d.hp+' / '+d.maxHp+'\n饱腹值：'+d.hunger+' / 4')});
 cmd('饱腹','查看饱腹值：.饱腹',(c,m)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const d=sync(c);reply(c,m,(d.hunger===0?'【饥饿】\n':'')+'饱腹值：'+d.hunger+' / 4')});
 cmd('营地菜单','查看营地早餐菜单：.营地菜单',(c,m)=>reply(c,m,'🥣【营地早餐菜单】\n'+MENU.map(x=>'• '+x[0]+'：'+x[1]).join('\n')));
-cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2—4人）',(c,m,a)=>{
+cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2—4人，可省略早餐前缀）',(c,m,a)=>{
  if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}
  const foodName=String(a.getArgN(1)||'').trim();
  if(!foodName){reply(c,m,'格式：.共享 营地早餐：食物名称 @同学（总人数2—4人，包含自己）');return}
@@ -65,7 +65,7 @@ cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2�
  if(!found){reply(c,m,'你的背包里没有「'+foodName+'」。');return}
  if(!found.it.campBreakfast&&!Number.isFinite(Number(found.it.hungerRestore))){reply(c,m,'「'+foodName+'」尚未设置食用效果，不能分享食用。');return}
  if(Number(found.it.count)<1){reply(c,m,'「'+foodName+'」数量不足。');return}
- found.it.count--;if(found.it.count<=0)delete owner.items[found.k][foodName];
+ found.it.count--;if(found.it.count<=0)delete owner.items[found.k][found.name];
  for(let i=0;i<states.length;i++){
    const d=states[i].data,oldHp=Number(d.hp)||0;
    d.hp=Math.min(Number(d.maxHp)||10,oldHp+1);
