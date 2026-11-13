@@ -27,6 +27,8 @@ jobs:
           VERSION="$(grep -A 8 '^\[package\]' camp-life-sealpack/info.toml | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)"
           test -n "$VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: JavaScript syntax check
+        run: node --check camp-life-sealpack/scripts/main.js
       - name: Validate and pack
         run: |
           npx --yes sealpack@0.1.2 validate camp-life-sealpack
