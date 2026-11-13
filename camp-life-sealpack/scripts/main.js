@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.0.2
+// @version 1.0.4
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.0.2',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.0.4',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。']];
@@ -19,15 +19,29 @@ function ok(c){const p=prof(c);return !!(p&&(typeof p==='string'||p.id||p.name))
 function pname(c){const p=prof(c);return p&&p.name||c.player&&c.player.name||uid(c)}
 function reply(c,m,t){seal.replyToSender(c,m,t)}
 function cmd(n,h,fn){const x=seal.ext.newCmdItemInfo();x.name=n;x.help=h;x.solve=(c,m,a)=>{try{fn(c,m,a)}catch(e){console.log('[冬训营生活] '+e);reply(c,m,'冬训营生活系统：'+(e.message||e))}return seal.ext.newCmdExecuteResult(true)};ext.cmdMap[n]=x}
-function day(d){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);return p.find(x=>x.type==='year').value+'-'+p.find(x=>x.type==='month').value+'-'+p.find(x=>x.type==='day').value}
-function hour(d){return +new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Shanghai',hour:'2-digit',hourCycle:'h23'}).format(d)}
+// 固定 UTC+8：北京时间无夏令时；避免 SealDice JS 沙箱缺少 Intl。
+function bj(d){return new Date(d.getTime()+8*60*60*1000)}
+function day(d){const x=bj(d);return x.getUTCFullYear()+'-'+String(x.getUTCMonth()+1).padStart(2,'0')+'-'+String(x.getUTCDate()).padStart(2,'0')}
+function hour(d){return bj(d).getUTCHours()}
 function boundary(y,m,d,h){return Date.UTC(y,m-1,d,h-8)}
 function bag(c){const d=read(c,BAG,{version:3,hp:10,maxHp:10,items:{}});if(!d.items)d.items={};for(const k of ['fish','mushroom','berry','supplies','equipment','other'])if(!d.items[k])d.items[k]={};if(!Number.isFinite(+d.hp))d.hp=10;if(!Number.isFinite(+d.maxHp))d.maxHp=10;if(!Number.isFinite(+d.hunger))d.hunger=4;if(!Number.isFinite(+d.hungerUpdatedAt))d.hungerUpdatedAt=Date.now();return d}
 function save(c,d){d.version=3;write(c,BAG,d)}
-function sync(c){const d=bag(c),now=Date.now(),start=d.hungerUpdatedAt,parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(start)),y=+parts.find(x=>x.type==='year').value,m=+parts.find(x=>x.type==='month').value,dd=+parts.find(x=>x.type==='day').value;
-for(let i=0;i<=370;i++){const dt=new Date(Date.UTC(y,m-1,dd+i));for(const h of [5,10,15,20]){const t=boundary(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate(),h);if(t>start&&t<=now)d.hunger=h===5?1:Math.max(0,d.hunger-1)}}
-d.hungerUpdatedAt=now;for(const [n,it] of Object.entries(d.items.other)){if(it&&it.campBreakfast&&+it.expiresAt>0&&+it.expiresAt<=now)delete d.items.other[n]}save(c,d);return d}
-function nextEight(){const now=new Date(),p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now),y=+p.find(x=>x.type==='year').value,m=+p.find(x=>x.type==='month').value,d=+p.find(x=>x.type==='day').value;return boundary(y,m,d+1,8)}
+function sync(c){
+const d=bag(c),now=Date.now(),start=Math.min(now,Number(d.hungerUpdatedAt)||now);
+const startBj=bj(new Date(start)),y=startBj.getUTCFullYear(),m=startBj.getUTCMonth(),dd=startBj.getUTCDate();
+const days=Math.min(370,Math.max(0,Math.ceil((now-start)/86400000)+2));
+for(let i=0;i<=days;i++){
+ const dt=new Date(Date.UTC(y,m,dd+i));
+ for(const h of [5,10,15,20]){
+  const t=boundary(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate(),h);
+  if(t>start&&t<=now)d.hunger=h===5?1:Math.max(0,d.hunger-1);
+ }
+}
+d.hungerUpdatedAt=now;
+for(const [n,it] of Object.entries(d.items.other)){if(it&&it.campBreakfast&&+it.expiresAt>0&&+it.expiresAt<=now)delete d.items.other[n]}
+save(c,d);return d
+}
+function nextEight(){const x=bj(new Date());return boundary(x.getUTCFullYear(),x.getUTCMonth()+1,x.getUTCDate()+1,8)}
 function find(d,n){const names=[n,n.startsWith('营地早餐：')?n:'营地早餐：'+n];for(const name of names)for(const k of Object.keys(d.items)){if(d.items[k][name]&&+d.items[k][name].count>0)return {k,it:d.items[k][name],name}}return null}
 cmd('点名','每日点名：.点名',(c,m)=>{
 if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}
