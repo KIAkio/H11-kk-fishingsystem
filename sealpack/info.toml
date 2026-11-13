@@ -3,7 +3,7 @@ format_version = "1.0.0"
 [package]
 id = "kiakio/goblin-backpack"
 name = "地精背包核心"
-version = "1.5.2"
+version = "1.5.3"
 authors = ["KIAkio"]
 license = "All Rights Reserved"
 description = "冬训营采集与钓鱼玩法共用的个人背包、群内独立编号档案、物资和生命值核心"
