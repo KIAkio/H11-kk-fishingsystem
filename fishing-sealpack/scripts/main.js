@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.3.3
+// @version      3.3.4
 // @description  80种鱼类、稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.3');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.4');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -509,7 +509,7 @@
 
     // 3. 查看背包
     registerCommand(
-        '查看背包',
+        '鱼篓',
         '查看所有已捕获鱼类',
         (ctx, msg) => {
             const data = loadData();
