@@ -3,7 +3,7 @@ format_version = "1.0.0"
 [package]
 id = "kiakio/h11-fishing"
 name = "H11 钓鱼系统"
-version = "3.4.0"
+version = "3.4.1"
 authors = ["KIAkio"]
 license = "All Rights Reserved"
 description = "圣布里吉冬训营钓鱼、鱼类图鉴及当前角色背包同步"
