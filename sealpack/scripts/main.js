@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.1
+// @version      1.8.2
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.1';
+  const VERSION = '1.8.2';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -84,8 +84,8 @@
   if (!ext) {
     ext = seal.ext.new(EXT_ID, 'KIAkio', VERSION);
   } else {
-    console.log('[地精背包] 检测到同名扩展，跳过重复注册。');
-    return;
+    // 更新已有扩展的指令映射，不再因为同名扩展而跳过新指令注册。
+    console.log('[地精背包] 检测到已有扩展，重新绑定 v'+VERSION+' 指令。');
   }
 
   function createDefaultData() {
@@ -555,10 +555,10 @@
   function grantCampItem(ctx,msg,args){
     if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'只有管理员、群主或骰主可以发放物品。');return;}
     const raw=String(msg&&msg.message||'').trim();
-    const body=raw.replace(/^[.。，](?:营地发放|发放)\s*/,'').trim();
+    const body=raw.replace(/^[.。，]发放\s*/,'').trim();
     const tokens=body.split(/\s+/).filter(Boolean);
     const index=tokens.findIndex(x=>!!getCategoryKey(x));
-    const usage='格式：.营地发放 004 其他 鸡蛋面糊煎饼 1\n或：.营地发放 @玩家 其他 鸡蛋面糊煎饼 1';
+    const usage='格式：。发放 004 其他 鸡蛋面糊煎饼 1\n或：。发放 @玩家 其他 鸡蛋面糊煎饼 1';
     if(index<1){reply(ctx,msg,usage);return;}
     const selector=tokens.slice(0,index).join(' ').trim();
     const category=getCategoryKey(tokens[index]);
@@ -591,18 +591,16 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【营地发放 v1.8.1】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放 v1.8.2】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const queue=jsonRead(ctx,'$gH11待发放物品',{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(ctx,'$gH11待发放物品',queue);
-    reply(ctx,msg,'🎁【营地发放 v1.8.1】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    reply(ctx,msg,'🎁【发放 v1.8.2】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
-  registerCommand('背包版本','检查当前加载的背包插件版本：.背包版本',(ctx,msg)=>reply(ctx,msg,'【地精背包核心 v'+VERSION+'】\n新版发放指令：.营地发放 004 其他 鸡蛋面糊煎饼 1\n如果 .发放 回复没有版本号，说明有其他处理器在响应。'));
-  registerCommand('营地发放','新版发放（推荐）：.营地发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
-  registerCommand('发放','发放别名：.发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
+  registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
   registerCommand('重置所有背包', '重置自己的全部背包物品与 HP：.重置所有背包 确认', (ctx, msg, args) => {
     const confirm = String(args.getArgN(1) || '').trim();
