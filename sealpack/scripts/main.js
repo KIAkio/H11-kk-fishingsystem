@@ -553,14 +553,14 @@
     // 同时接受「.发放@玩家 ...」和「.发放 @玩家 ...」。
     // 只移除命令名后的空白，不要求 @ 前必须有空格。
     const rawMessage=String(msg&&msg.message||'').trim();
-    const body=rawMessage.replace(/^[.。，]发放\\s*/,'').trim();
-    const tokens=body.split(/\\s+/).filter(Boolean);
+    const body=rawMessage.replace(/^[.。，]发放\s*/,'').trim();
+    const tokens=body.split(/\s+/).filter(Boolean);
     const categoryIndex=tokens.findIndex(t=>!!getCategoryKey(t));
     let category,itemName,amountText;
     if(categoryIndex>=0){
       category=getCategoryKey(tokens[categoryIndex]);
       const tail=tokens.slice(categoryIndex+1);
-      if(tail.length && /^\\d+$/.test(tail[tail.length-1]))amountText=tail.pop();
+      if(tail.length && /^\d+$/.test(tail[tail.length-1]))amountText=tail.pop();
       else amountText='1';
       itemName=tail.join(' ').trim();
     }
@@ -574,7 +574,7 @@
     }
     const amount=Number(amountText);
     if(!category||!itemName){
-      reply(ctx,msg,'格式：.发放@玩家 分类 物品名 数量\\n也支持：.发放 @玩家 分类 物品名 数量\\n分类：鱼类、蘑菇、浆果、日用品、训练装备、其他');
+      reply(ctx,msg,'格式：.发放@玩家 分类 物品名 数量\n也支持：.发放 @玩家 分类 物品名 数量\n分类：鱼类、蘑菇、浆果、日用品、训练装备、其他');
       return;
     }
     if(!Number.isInteger(amount)||amount<1||amount>9999){
@@ -584,7 +584,7 @@
     const newCount=addItem(targetData,category,itemName,amount,'');
     saveData(targetCtx,targetData);
     const targetName=getRegisteredName(targetCtx);
-    reply(ctx,msg,'🎁 已向「'+targetName+'」发放：'+itemName+' ×'+amount+'\\n对方当前持有：'+newCount+' 件');
+    reply(ctx,msg,'🎁 已向「'+targetName+'」发放：'+itemName+' ×'+amount+'\n对方当前持有：'+newCount+' 件');
   });
 
   registerCommand('重置所有背包', '重置自己的全部背包物品与 HP：.重置所有背包 确认', (ctx, msg, args) => {
