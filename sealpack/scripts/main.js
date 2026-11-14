@@ -477,7 +477,7 @@
     return m?m[1]:'';
   }
   function confirmDelete(ctx,msg,raw){
-    if(!/^\\d+$/.test(raw)){reply(ctx,msg,'格式：.确认删除000 或 .确认删除 000');return;}
+    if(!/^\d+$/.test(raw)){reply(ctx,msg,'格式：.确认删除000 或 .确认删除 000');return;}
     const id=raw.padStart(3,'0'),key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key];
     if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有待确认的删除请求，或已过期。');return;}
     const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
