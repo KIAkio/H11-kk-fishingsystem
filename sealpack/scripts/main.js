@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.7.6';
+  const VERSION = '1.7.7';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -545,11 +545,22 @@
       reply(ctx, msg, '只有群管理员、群主或骰主可以发放物品。');
       return;
     }
-    const targetCtx = seal.getCtxProxyFirst(ctx, args);
+    const targetCtx = typeof seal.getCtxProxyFirst==='function' ? seal.getCtxProxyFirst(ctx, args) : null;
     if (!targetCtx || !targetCtx.player || !targetCtx.player.userId) {
       reply(ctx, msg, '请先 @ 一位玩家。格式：.发放@玩家 日用品 止血带 1');
       return;
     }
+    const senderId=getPlayerId(ctx),recipientId=targetCtx&&targetCtx.player?getPlayerId(targetCtx):'';
+    if(!recipientId||recipientId===senderId){
+      reply(ctx,msg,'没有识别到其他玩家。请在群里使用真正的 @ 选择收件人，不能发放给自己。');return;
+    }
+    const groupProfiles=loadGroupProfiles(ctx);
+    const recipientRoles=groupProfiles.members[recipientId]||[];
+    const recipientRole=recipientRoles.find(x=>x.id===groupProfiles.active[recipientId]);
+    if(!recipientRole){
+      reply(ctx,msg,'被@的玩家尚未在本群注册或没有选定角色，请先让对方使用 .注册 姓名。');return;
+    }
+    // 先验证接收者身份，再允许写入背包，防止 @ 解析错误时误发给自己。
     // 同时接受「.发放@玩家 ...」和「.发放 @玩家 ...」。
     // 只移除命令名后的空白，不要求 @ 前必须有空格。
     const rawMessage=String(msg&&msg.message||'').trim();
@@ -580,6 +591,7 @@
     if(!Number.isInteger(amount)||amount<1||amount>9999){
       reply(ctx,msg,'发放数量必须为 1 至 9999 的整数。');return;
     }
+    if(getPlayerId(targetCtx)!==recipientId){reply(ctx,msg,'目标玩家识别不一致，已取消发放。');return;}
     const targetData=loadData(targetCtx);
     const newCount=addItem(targetData,category,itemName,amount,'');
     saveData(targetCtx,targetData);
