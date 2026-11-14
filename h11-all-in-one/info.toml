@@ -3,7 +3,7 @@ format_version = "1.0.0"
 [package]
 id = "kiakio/h11-all-in-one"
 name = "H11 冬训营整合包"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["KIAkio"]
 license = "All Rights Reserved"
 description = "H11 角色档案与背包、钓鱼、采集、营地生活与点名，一次安装"
