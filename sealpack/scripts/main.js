@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.7.2';
+  const VERSION = '1.7.3';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -371,7 +371,7 @@
     '.食用 食物名 — 食用背包物品',
     '.丢弃 物品名 [数量/全部] — 丢弃物品',
     '.重置所有背包 确认 — 清空个人背包并恢复 HP',
-    '.发放 @玩家 分类 物品名 数量 — 管理员发放物品',
+    '.发放@玩家 分类 物品名 数量 / .发放 @玩家 分类 物品名 数量 — 管理员发放物品',
     '【冬训营生活】',
     '.点名 — 每日点名（北京时间 00:00—11:59）',
     '.点名信息 — 查看个人点名记录',
@@ -540,44 +540,52 @@
   });
 
 
-  registerCommand('发放', '管理员发放物品：.发放 @玩家 分类 物品名 数量', (ctx, msg, args) => {
+  registerCommand('发放', '管理员发放物品：.发放@玩家 分类 物品名 数量', (ctx, msg, args) => {
     if (Number(ctx.privilegeLevel) < 50) {
       reply(ctx, msg, '只有群管理员、群主或骰主可以发放物品。');
       return;
     }
-
     const targetCtx = seal.getCtxProxyFirst(ctx, args);
     if (!targetCtx || !targetCtx.player || !targetCtx.player.userId) {
-      reply(ctx, msg, '请先 @ 一位玩家。格式：.发放 @玩家 日用品 止血带 1');
+      reply(ctx, msg, '请先 @ 一位玩家。格式：.发放@玩家 日用品 止血带 1');
       return;
     }
-
-    // @目标可能占据第一个命令参数；同时兼容未计入参数的适配器。
-    const first = String(args.getArgN(1) || '').trim();
-    const offset = getCategoryKey(first) ? 0 : 1;
-    const category = getCategoryKey(args.getArgN(1 + offset));
-    const itemName = String(args.getArgN(2 + offset) || '').trim();
-    const amountText = String(args.getArgN(3 + offset) || '1').trim();
-    const amount = Math.floor(Number(amountText));
-
-    if (!category || !itemName) {
-      reply(ctx, msg, '格式：.发放 @玩家 分类 物品名 数量\n分类：鱼类、蘑菇、浆果、日用品、训练装备、其他');
+    // 同时接受「.发放@玩家 ...」和「.发放 @玩家 ...」。
+    // 只移除命令名后的空白，不要求 @ 前必须有空格。
+    const rawMessage=String(msg&&msg.message||'').trim();
+    const body=rawMessage.replace(/^[.。，]发放\\s*/,'').trim();
+    const tokens=body.split(/\\s+/).filter(Boolean);
+    const categoryIndex=tokens.findIndex(t=>!!getCategoryKey(t));
+    let category,itemName,amountText;
+    if(categoryIndex>=0){
+      category=getCategoryKey(tokens[categoryIndex]);
+      const tail=tokens.slice(categoryIndex+1);
+      if(tail.length && /^\\d+$/.test(tail[tail.length-1]))amountText=tail.pop();
+      else amountText='1';
+      itemName=tail.join(' ').trim();
+    }
+    // 某些适配器把 @ 单独存为元数据，消息文本可能不含 @。
+    if(!category){
+      const first=String(args.getArgN(1)||'').trim();
+      const offset=getCategoryKey(first)?0:1;
+      category=getCategoryKey(args.getArgN(1+offset));
+      itemName=String(args.getArgN(2+offset)||'').trim();
+      amountText=String(args.getArgN(3+offset)||'1').trim();
+    }
+    const amount=Number(amountText);
+    if(!category||!itemName){
+      reply(ctx,msg,'格式：.发放@玩家 分类 物品名 数量\\n也支持：.发放 @玩家 分类 物品名 数量\\n分类：鱼类、蘑菇、浆果、日用品、训练装备、其他');
       return;
     }
-    if (!Number.isFinite(amount) || amount < 1 || amount > 9999) {
-      reply(ctx, msg, '发放数量必须为 1 至 9999 的整数。');
-      return;
+    if(!Number.isInteger(amount)||amount<1||amount>9999){
+      reply(ctx,msg,'发放数量必须为 1 至 9999 的整数。');return;
     }
-
-    const targetData = loadData(targetCtx);
-    const newCount = addItem(targetData, category, itemName, amount, '');
-    saveData(targetCtx, targetData);
-
-    const targetName = String(targetCtx.player.name || '玩家');
-    reply(ctx, msg, '🎁 已向「' + targetName + '」发放：' + itemName + ' ×' + amount +
-      '\n对方当前持有：' + newCount + ' 件');
+    const targetData=loadData(targetCtx);
+    const newCount=addItem(targetData,category,itemName,amount,'');
+    saveData(targetCtx,targetData);
+    const targetName=getRegisteredName(targetCtx);
+    reply(ctx,msg,'🎁 已向「'+targetName+'」发放：'+itemName+' ×'+amount+'\\n对方当前持有：'+newCount+' 件');
   });
-
 
   registerCommand('重置所有背包', '重置自己的全部背包物品与 HP：.重置所有背包 确认', (ctx, msg, args) => {
     const confirm = String(args.getArgN(1) || '').trim();
