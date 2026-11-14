@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.7.9';
+  const VERSION = '1.8.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -551,55 +551,57 @@
   });
 
 
-  registerCommand('发放', '管理员发放：.发放 001 日用品 止血带 1 或 .发放 @玩家 日用品 止血带 1', (ctx, msg, args) => {
-    if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'只有群管理员、群主或骰主可以发放物品。');return;}
-    const rawMessage=String(msg&&msg.message||'').trim();
-    const body=rawMessage.replace(/^[.。，]发放\s*/,'').trim();
+  // 独立的营地发放入口，避免旧插件占用 .发放 时无法排查。
+  function grantCampItem(ctx,msg,args){
+    if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'只有管理员、群主或骰主可以发放物品。');return;}
+    const raw=String(msg&&msg.message||'').trim();
+    const body=raw.replace(/^[.。，](?:营地发放|发放)\s*/,'').trim();
     const tokens=body.split(/\s+/).filter(Boolean);
-    const categoryIndex=tokens.findIndex(t=>!!getCategoryKey(t));
-    if(categoryIndex<0){reply(ctx,msg,'格式：.发放 001 日用品 止血带 1\n或：.发放 @玩家 日用品 止血带 1');return;}
-    const category=getCategoryKey(tokens[categoryIndex]),tail=tokens.slice(categoryIndex+1);
-    const amountText=tail.length&&/^\d+$/.test(tail[tail.length-1])?tail.pop():'1';
-    const itemName=tail.join(' ').trim(),amount=Number(amountText);
-    if(!itemName||!Number.isInteger(amount)||amount<1||amount>9999){reply(ctx,msg,'请填写物品名称和 1—9999 的发放数量。');return;}
-    const profiles=loadGroupProfiles(ctx),selector=tokens.slice(0,categoryIndex).join(' ').trim();
-    let owner='',recipientRole=null,targetCtx=null;
+    const index=tokens.findIndex(x=>!!getCategoryKey(x));
+    const usage='格式：.营地发放 004 其他 鸡蛋面糊煎饼 1\n或：.营地发放 @玩家 其他 鸡蛋面糊煎饼 1';
+    if(index<1){reply(ctx,msg,usage);return;}
+    const selector=tokens.slice(0,index).join(' ').trim();
+    const category=getCategoryKey(tokens[index]);
+    const tail=tokens.slice(index+1);
+    const amount=tail.length&&/^\d+$/.test(tail[tail.length-1])?Number(tail.pop()):1;
+    const itemName=tail.join(' ').trim();
+    if(!itemName||!Number.isInteger(amount)||amount<1||amount>9999){reply(ctx,msg,usage);return;}
+    const profiles=loadGroupProfiles(ctx),sender=getPlayerId(ctx);
+    let owner='',role=null;
     if(/^\d{1,3}$/.test(selector)){
       const id=selector.padStart(3,'0');
-      for(const [userId,roles] of Object.entries(profiles.members)){
-        const match=roles.find(x=>x.id===id);
-        if(match){owner=userId;recipientRole=match;break;}
+      const matches=[];
+      for(const [uid,roles] of Object.entries(profiles.members)){
+        for(const entry of roles)if(entry.id===id)matches.push({uid,entry});
       }
-      if(!recipientRole){reply(ctx,msg,'当前群聊没有编号 '+id+' 的角色。请使用 .营地名单 核对编号。');return;}
-    }else{
-      if(typeof seal.getCtxProxyFirst==='function'){
-        try{targetCtx=seal.getCtxProxyFirst(ctx,args)}catch(e){}
-      }
-      const targetId=targetCtx&&targetCtx.player?getPlayerId(targetCtx):'';
-      const senderId=getPlayerId(ctx);
-      if(!targetId||(!selector.includes('@')&&targetId===senderId)){
-        reply(ctx,msg,'无法确认 @ 对象。请使用 .发放 001 分类 物品名 数量，或在群聊中真正 @ 玩家。');return;
-      }
-      owner=targetId;
+      if(matches.length!==1){reply(ctx,msg,matches.length?'编号重复，已取消发放。':'当前群没有 '+id+' 号角色，请用 .营地名单 核对。');return;}
+      owner=matches[0].uid;role=matches[0].entry;
+    }else if(selector.includes('@')){
+      let proxy=null;
+      if(typeof seal.getCtxProxyFirst==='function'){try{proxy=seal.getCtxProxyFirst(ctx,args)}catch(e){}}
+      const target=proxy&&proxy.player?getPlayerId(proxy):'';
+      if(!target||target===sender){reply(ctx,msg,'无法可靠识别 @ 的收件人，已取消发放。请改用群内三位角色编号。');return;}
+      owner=target;
       const roles=profiles.members[owner]||[];
-      recipientRole=roles.find(x=>x.id===profiles.active[owner]);
-      if(!recipientRole){reply(ctx,msg,'被@玩家尚未注册或没有选定角色。');return;}
-    }
-    const id=String(recipientRole.id).padStart(3,'0');
-    if(owner===getPlayerId(ctx)){
+      role=roles.find(x=>x.id===profiles.active[owner])||null;
+      if(!role){reply(ctx,msg,'被@玩家尚未在本群注册角色。');return;}
+    }else{reply(ctx,msg,usage);return;}
+    const id=String(role.id).padStart(3,'0'),key=owner+'::'+id;
+    // 目标编号可以是自己的非当前角色，不能写入当前角色背包。
+    if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁 已向「'+recipientRole.name+' '+id+'」发放：'+itemName+' ×'+amount+'\n当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【营地发放 v1.8.0】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
-    // 按编号发放不依赖目标在线或 @ 代理上下文，写入群共享待领取队列。
-    // 目标下次使用背包核心命令时自动入账，避免错写到管理员自己的 $m 存档。
+    // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const queue=jsonRead(ctx,'$gH11待发放物品',{});
-    const key=owner+'::'+id;
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(ctx,'$gH11待发放物品',queue);
-    reply(ctx,msg,'🎁 已为「'+recipientRole.name+' '+id+'」登记：'+itemName+' ×'+amount+'\n对方下次使用背包核心指令时自动入账。');
-  });
+    reply(ctx,msg,'🎁【营地发放 v1.8.0】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+  }
+  registerCommand('营地发放','新版发放（推荐）：.营地发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
+  registerCommand('发放','发放别名：.发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
   registerCommand('重置所有背包', '重置自己的全部背包物品与 HP：.重置所有背包 确认', (ctx, msg, args) => {
     const confirm = String(args.getArgN(1) || '').trim();
