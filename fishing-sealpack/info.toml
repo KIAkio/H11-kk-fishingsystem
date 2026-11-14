@@ -1,0 +1,36 @@
+format_version = "1.0.0"
+
+[package]
+id = "kiakio/h11-fishing"
+name = "H11 钓鱼系统"
+version = "3.3.3"
+authors = ["KIAkio"]
+license = "All Rights Reserved"
+description = "圣布里吉冬训营钓鱼、鱼类图鉴及当前角色背包同步"
+keywords = ["sealdice", "fishing", "h11", "camp"]
+
+[package.seal]
+min_version = "1.6.0"
+
+[dependencies]
+
+[permissions]
+network = false
+file_read = []
+file_write = []
+
+[contents]
+scripts = ["scripts/*.js"]
+decks = []
+reply = []
+helpdoc = []
+templates = []
+
+[store]
+readme = "README.md"
+icon = ""
+banner = ""
+screenshots = []
+category = "game"
+
+[config]
