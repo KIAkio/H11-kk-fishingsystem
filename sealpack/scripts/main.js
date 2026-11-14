@@ -443,7 +443,7 @@
   function changeCampRole(ctx,msg,args,reset){
     if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'仅群管理员、群主或骰主可以任命或解除职务。');return;}
     const raw=String(args.getArgN(1)||'').trim();
-    if(!/^\\d+$/.test(raw)){reply(ctx,msg,'请提供纯数字档案编号，例如：.任命 002 教官');return;}
+    if(!/^\d+$/.test(raw)){reply(ctx,msg,'请提供纯数字档案编号，例如：.任命 002 教官');return;}
     const id=raw.padStart(3,'0'),role=reset?'学员':String(args.getArgN(2)||'').trim();
     if(!['学员','教官','教师'].includes(role)||(role==='学员'&&!reset)){
       reply(ctx,msg,'可任命的职务为：教官、教师。恢复学员请使用 .解除任命 编号');return;
@@ -453,7 +453,7 @@
     if(matches.length!==1){reply(ctx,msg,'未找到唯一的档案编号：'+id);return;}
     const target=matches[0].r,old=target.role||'学员';
     target.role=role;saveGroupProfiles(ctx,p);
-    reply(ctx,msg,(reset?'已解除职务':'任命成功')+'：'+target.name+'（'+id+'）\\n'+old+' → '+role+'\\n角色编号、背包及属性保持不变。');
+    reply(ctx,msg,(reset?'已解除职务':'任命成功')+'：'+target.name+'（'+id+'）\n'+old+' → '+role+'\n角色编号、背包及属性保持不变。');
   }
   registerCommand('任命','管理员任命：.任命 002 教官/教师',(ctx,msg,args)=>changeCampRole(ctx,msg,args,false));
   registerCommand('解除任命','管理员解除任命：.解除任命 002',(ctx,msg,args)=>changeCampRole(ctx,msg,args,true));
