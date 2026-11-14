@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.2.0
+// @version      3.3.0
 // @description  80种鱼类、稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.2.0');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.0');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -249,21 +249,20 @@
             throw new Error('无法访问共享背包变量，请确认已安装并启用「地精背包核心」。');
         }
 
-        const variableName = '$m地精背包数据';
-        const result = seal.vars.strGet(ctx, variableName);
-        const raw = Array.isArray(result) ? result[0] : '';
-        let data;
-
-        if (raw) {
-            try {
-                data = JSON.parse(raw);
-            } catch (e) {
-                throw new Error('共享背包存档无法解析，未能同步本次鱼获。');
-            }
-        } else {
-            data = {};
-        }
-
+        const profileResult=seal.vars.strGet(ctx,'$g地精档案编号表');
+        const profileRaw=Array.isArray(profileResult)?profileResult[0]:'';
+        if(!profileRaw)throw Error('请先注册营地角色。');
+        let profiles;try{profiles=JSON.parse(profileRaw)}catch(e){throw Error('角色档案损坏，停止写入。')}
+        const uid=String(ctx.player&&(ctx.player.userId||ctx.player.id)||'');
+        const own=profiles.members&&profiles.members[uid],arr=Array.isArray(own)?own:own?[own]:[];
+        const selected=arr.find(x=>x.id===(profiles.active||{})[uid])||arr[0];
+        if(!selected)throw Error('请先注册营地角色。');
+        const role=String(ctx.group&&(ctx.group.groupId||ctx.group.id)||'private')+'::'+String(selected.id).padStart(3,'0');
+        const variableName='$mH11角色数据仓库';
+        const result=seal.vars.strGet(ctx,variableName);
+        const raw=Array.isArray(result)?result[0]:'';
+        let store={};if(raw){try{store=JSON.parse(raw)}catch(e){throw Error('角色背包仓库损坏，停止写入。')}}
+        let data=store[role]||{};
         if (!data.items || typeof data.items !== 'object') data.items = {};
         if (!data.items.fish || typeof data.items.fish !== 'object') {
             data.items.fish = {};
@@ -281,26 +280,11 @@
             data.items.fish[fishName] = item;
         }
 
-        // 第一次接入时，将该群旧钓鱼背包中的历史鱼获迁移一次。
-        if (!player.sharedBackpackMigrated) {
-            for (const oldFish of Object.values(player.bag || {})) {
-                addOneFish(
-                    oldFish.name,
-                    oldFish.count,
-                    (oldFish.location || '未知水域') + ' · ' + (oldFish.rarity || '鱼类')
-                );
-            }
-            player.sharedBackpackMigrated = true;
-        } else {
-            addOneFish(
-                caughtFish.name,
-                1,
-                caughtFish.location + ' · ' + RARITY[caughtFish.rarity].name
-            );
-        }
-
+        // 仅将本次鱼获写入当前角色；历史鱼获保留在旧钓鱼图鉴，避免跨角色重复迁移。
+        addOneFish(caughtFish.name,1,caughtFish.location+' · '+RARITY[caughtFish.rarity].name);
         data.version = 2;
-        seal.vars.strSet(ctx, variableName, JSON.stringify(data));
+        store[role]=data;
+        seal.vars.strSet(ctx, variableName, JSON.stringify(store));
     }
 
     // 钓鱼结算
