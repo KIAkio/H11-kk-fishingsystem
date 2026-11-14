@@ -81,13 +81,15 @@
     return list[list.length - 1];
   }
 
-  function addToSharedBackpack(ctx, item) {
+  function h11role(c){const r=seal.vars.strGet(c,'$g地精档案编号表'),raw=Array.isArray(r)?r[0]:'';if(!raw)throw Error('请先注册营地角色。');let p;try{p=JSON.parse(raw)}catch(e){throw Error('营地档案损坏，停止写入。')}const uid=String(c.player&&(c.player.userId||c.player.id)||''),list=p.members&&p.members[uid],arr=Array.isArray(list)?list:list?[list]:[];const id=p.active&&p.active[uid]||arr[0]&&arr[0].id;if(!id)throw Error('请先注册营地角色。');return String(c.group&&(c.group.groupId||c.group.id)||'private')+'::'+String(id).padStart(3,'0')}
+  function h11read(c){const r=seal.vars.strGet(c,'$mH11角色数据仓库'),raw=Array.isArray(r)?r[0]:'';if(!raw)return {};try{return JSON.parse(raw)}catch(e){throw Error('角色存档损坏，停止写入。')}}
+    function addToSharedBackpack(ctx, item) {
     if (!seal.vars || typeof seal.vars.strGet !== 'function' || typeof seal.vars.strSet !== 'function') {
       throw new Error('无法访问共享背包变量，请确认已安装并启用「地精背包核心」。');
     }
 
-    const result = seal.vars.strGet(ctx, DATA_VAR);
-    const raw = Array.isArray(result) ? result[0] : '';
+    const store=h11read(ctx),role=h11role(ctx);
+    const raw=store[role] ? JSON.stringify(store[role]) : '';
     let data;
     if (raw) {
       try {
@@ -111,7 +113,8 @@
     if (!Number.isFinite(Number(data.hp))) data.hp = 10;
     if (!Number.isFinite(Number(data.maxHp))) data.maxHp = 10;
 
-    seal.vars.strSet(ctx, DATA_VAR, JSON.stringify(data));
+    store[role]=data;
+    seal.vars.strSet(ctx, '$mH11角色数据仓库', JSON.stringify(store));
     return current.count;
   }
 
