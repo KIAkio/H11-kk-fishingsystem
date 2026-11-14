@@ -9,7 +9,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_gathering_system';
-  const VERSION = '1.1.0';
+  const VERSION = '1.1.1';
   const DATA_VAR = '$m地精背包数据';
 
   if (seal.ext.find(EXT_ID)) {
@@ -118,10 +118,16 @@
     return current.count;
   }
 
-  function formatItem(item, count) {
+  function gatheringName(ctx) {
+    const r=seal.vars.strGet(ctx,'$g地精档案编号表'),raw=Array.isArray(r)?r[0]:'';
+    if(raw){try{const p=JSON.parse(raw),uid=String(ctx.player&&(ctx.player.userId||ctx.player.id)||''),list=p.members&&p.members[uid],arr=Array.isArray(list)?list:list?[list]:[],selected=arr.find(x=>x.id===(p.active||{})[uid])||arr[0];if(selected&&selected.name)return selected.name;}catch(e){}}
+    return String(ctx.player&&ctx.player.name||'玩家');
+  }
+
+  function formatItem(item, count, name) {
     const rarity = RARITY[item.rarity];
     return [
-      '🌿【采集结果】',
+      '🌿【' + name + '的采集结果】',
       '',
       '你采集到了：' + item.name + '！',
       '类别：' + (item.category === 'mushroom' ? '蘑菇' : '浆果'),
@@ -133,12 +139,12 @@
   }
 
   registerCommand('采集', '开始采集，2 秒后随机获得蘑菇或浆果：.采集', (ctx, msg) => {
-    reply(ctx, msg, '🌿 会采集到什么呢？');
+    reply(ctx, msg, '于是你弯下腰...>');
     setTimeout(() => {
       try {
         const item = weightedRandom(ITEMS);
         const count = addToSharedBackpack(ctx, item);
-        reply(ctx, msg, formatItem(item, count));
+        reply(ctx, msg, formatItem(item, count, gatheringName(ctx)));
       } catch (e) {
         console.log('[地精采集] 采集结算失败：' + e);
         reply(ctx, msg, '🌿 采集失败：' + String(e.message || e));
