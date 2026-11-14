@@ -96,6 +96,8 @@ jobs:
         run: |
           VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' h11-all-in-one/info.toml | head -n 1)"
           test -n "$VERSION"
+          test "$(sed -n 's/^format_version = "\(.*\)"$/\1/p' h11-all-in-one/info.toml | head -n 1)" = "1.0.0"
+          echo "Building H11 all-in-one package version $VERSION"
           echo "ALL_VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Validate and pack H11 all-in-one
