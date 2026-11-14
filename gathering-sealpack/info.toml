@@ -3,7 +3,7 @@ format_version = "1.0.0"
 [package]
 id = "kiakio/goblin-gathering"
 name = "地精采集系统"
-version = "1.0.2"
+version = "1.1.0"
 authors = ["KIAkio"]
 license = "All Rights Reserved"
 description = "蘑菇与浆果采集玩法，按稀有度随机获取并写入地精共享背包"
