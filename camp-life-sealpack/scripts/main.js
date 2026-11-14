@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.4
+// @version 1.1.5
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.4',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.5',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。']];
@@ -48,14 +48,24 @@ function nextEight(){const x=bj(new Date());return boundary(x.getUTCFullYear(),x
 function find(d,n){const names=[n,n.startsWith('营地早餐：')?n:'营地早餐：'+n];for(const name of names)for(const k of Object.keys(d.items)){if(d.items[k][name]&&+d.items[k][name].count>0)return {k,it:d.items[k][name],name}}return null}
 cmd('点名','每日点名：.点名',(c,m)=>{
 if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}
-const now=new Date();if(hour(now)>=15 || (hour(now)===14 && bj(now).getUTCMinutes()>=1)){reply(c,m,'呵呵..现在可不是打卡的时候...');return}
-const r=read(c,ATT,{lastDate:'',count:0}),today=day(now);if(r.lastDate===today){reply(c,m,'今日已打卡。早上好'+pname(c)+'同学=∨=\n🎫累计数：'+r.count);return}
+const now=new Date(),local=bj(now),seconds=local.getUTCHours()*3600+local.getUTCMinutes()*60+local.getUTCSeconds();
+if(seconds>14*3600){reply(c,m,'呵呵..现在可不是打卡的时候...');return}
+const student=pname(c)+'同学';
+let greeting;
+if(seconds<2*3600)greeting='还有这么勤奋的同学啊！';
+else if(seconds<5*3600)greeting='夜深人静……🌌，只有鼾声和'+student+'打卡的声音。';
+else if(seconds<6*3600+60)greeting='你见到了布里吉五点钟的太阳🌅，等等…太阳呢？';
+else if(seconds<11*3600)greeting='早上好'+student+'=∨=';
+else if(seconds<12*3600)greeting='上午好'+student;
+else if(seconds<12*3600+120)greeting='好险！你领到了最后一份早饭🙀';
+else greeting='希望你已经去领过午饭了…';
+const r=read(c,ATT,{lastDate:'',count:0}),today=day(now);if(r.lastDate===today){reply(c,m,'今日已打卡。\n🎫累计数：'+r.count);return}
 r.lastDate=today;r.count=(+r.count||0)+1;write(c,ATT,r);
 const rank=read(c,RANK,{members:{}});rank.members[uid(c)+'::'+role(c)]={name:pname(c),count:r.count};write(c,RANK,rank);
 const d=sync(c),a=MENU[Math.floor(Math.random()*MENU.length)],twice=Math.random()<.1,b=twice?MENU[Math.floor(Math.random()*MENU.length)]:null;
 function add(x){const n='营地早餐：'+x[0],v=d.items.other[n]||{count:0};v.count=(+v.count||0)+1;v.description=x[1];v.campBreakfast=true;v.hungerRestore=3;v.hpRestore=1;v.expiresAt=nextEight();d.items.other[n]=v}
 add(a);if(b)add(b);save(c,d);
-let out='今日已打卡。早上好'+pname(c)+'同学=∨=\n🎫累计数：'+r.count+'\n\n营地早餐：'+a[0];out+=twice?'，'+b[0]+'\n\n不知为何，领到了两份早餐，不过教官说没事可以多吃一点。留着或者分给其他同学都是很好的选择。':'\n'+a[1];reply(c,m,out)
+let out='今日已打卡。'+greeting+'\n🎫累计数：'+r.count+'\n\n营地早餐：'+a[0];out+=twice?'，'+b[0]+'\n\n不知为何，领到了两份早餐，不过教官说没事可以多吃一点。留着或者分给其他同学都是很好的选择。':'\n'+a[1];reply(c,m,out)
 });
 cmd('点名信息','查看点名记录：.点名信息',(c,m)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const r=read(c,ATT,{lastDate:'',count:0});reply(c,m,'🏕️【点名记录】\n累计数：'+r.count+'\n最近打卡：'+(r.lastDate||'暂无记录'))});
 cmd('点名排行','查看本群点名排行：.点名排行',(c,m)=>{const r=read(c,RANK,{members:{}}),a=Object.values(r.members).sort((x,y)=>y.count-x.count).slice(0,10);reply(c,m,'🏅【累计点名排行】\n'+(a.length?a.map((x,i)=>(i+1)+'. '+x.name+'：'+x.count+' 次').join('\n'):'暂无记录'))});
