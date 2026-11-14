@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.7.0';
+  const VERSION = '1.7.1';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -364,7 +364,8 @@
     '.切换 编号 — 切换角色',
     '.任命 编号 教官/教师 — 管理员任命职务',
     '.解除任命 编号 — 管理员恢复学员身份',
-    '.删除h编号 / .删除 姓名 — 删除角色（需确认）',
+    '.删除 编号/姓名 — 删除角色（需确认）',
+    '.确认删除 编号 — 确认删除',
     '.背包 [鱼类/蘑菇/浆果/日用品/训练装备/其他] — 查看背包',
     '.状态 — 查看 HP 与饱腹值',
     '.食用 食物名 — 食用背包物品',
@@ -395,19 +396,9 @@
 
   // 中文标点兼容：当海豹核心尚未配置中文前缀时，仍可查询 H11。
   // 其他玩法指令应在海豹核心的“指令前缀”中统一添加中文标点。
-  ext.onNotCommandReceived = (ctx, msg) => {
-    const input = String((msg && msg.message) || '').trim();
-    if (/^[。，]指令H11\s*$/i.test(input)) { reply(ctx,msg,H11_HELP);return; }
-    let match=input.match(/^[.。，]删除h(\d+)\s*$/i);
-    if(match){deleteRequest(ctx,msg,match[1].padStart(3,'0'));return;}
-    match=input.match(/^[.。，]确认删除h(\d+)\s*$/i);
-    if(match){const key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key],id=match[1].padStart(3,'0');
-      if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有有效的待确认删除请求。');return;}
-      const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
-      if(!r){reply(ctx,msg,'角色已不存在。');return;}
-      if(pending.owner!==getPlayerId(ctx)&&Number(ctx.privilegeLevel)<50){reply(ctx,msg,'权限不足。');return;}
-      deleteRole(ctx,pending.owner,r);delete pendingDeletes[key];reply(ctx,msg,'已删除：'+r.name+'（'+r.id+'）');
-    }
+  ext.onNotCommandReceived = (ctx,msg)=>{
+    const input=String(msg&&msg.message||'').trim();
+    if(/^[。，]指令H11\\s*$/i.test(input))reply(ctx,msg,H11_HELP);
   };
 
   registerCommand('注册', '建立档案：.注册 姓名', (ctx, msg, args) => {
@@ -472,21 +463,22 @@
       if(!target||!target.player||!target.player.userId){reply(ctx,msg,'无法识别目标玩家。');return;}
       owner=String(target.player.userId);
     }
-    const matches=(p.members[owner]||[]).filter(r=>r.id===selector || r.name===selector);
+    const normalized=/^\\d+$/.test(selector)?selector.padStart(3,'0'):selector;
+    const matches=(p.members[owner]||[]).filter(r=>r.id===normalized || r.name===selector);
     if(matches.length!==1){reply(ctx,msg,matches.length?'存在同名角色，请使用编号删除。':'未找到符合条件的角色。');return;}
     const r=matches[0],key=groupKey(ctx)+'::'+self;
     pendingDeletes[key]={owner,id:r.id,expires:Date.now()+120000};
-    reply(ctx,msg,'⚠️ 将删除「'+r.name+'」（'+r.id+'）。请在两分钟内发送：.确认删除h'+r.id);
+    reply(ctx,msg,'⚠️ 将删除「'+r.name+'」（'+r.id+'）。请在两分钟内发送：.确认删除 '+r.id);
   }
-  registerCommand('删除','按角色名删除：.删除 埃莱',(ctx,msg,args)=>{
-    const name=String(args.getArgN(1)||'').trim();
-    if(!name){reply(ctx,msg,'格式：.删除 角色名');return;}
-    deleteRequest(ctx,msg,name,args);
+  registerCommand('删除','删除角色：.删除 001 或 .删除 埃莱',(ctx,msg,args)=>{
+    const selector=String(args.getArgN(1)||'').trim();
+    if(!selector){reply(ctx,msg,'格式：.删除 编号 或 .删除 角色名');return;}
+    deleteRequest(ctx,msg,selector,args);
   });
-  // 海豹命令名通常按空格拆分；无空格的「删除h001」由非指令回调识别。
-  registerCommand('确认删除h','确认删除：.确认删除h 001',(ctx,msg,args)=>{
-    const id=String(args.getArgN(1)||'').trim().padStart(3,'0');
-    const key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key];
+  registerCommand('确认删除','确认删除：.确认删除 001',(ctx,msg,args)=>{
+    const raw=String(args.getArgN(1)||'').trim();
+    if(!/^\\d+$/.test(raw)){reply(ctx,msg,'格式：.确认删除 编号');return;}
+    const id=raw.padStart(3,'0'),key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key];
     if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有待确认的删除请求，或已过期。');return;}
     const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
     if(!r){delete pendingDeletes[key];reply(ctx,msg,'角色已不存在。');return;}
