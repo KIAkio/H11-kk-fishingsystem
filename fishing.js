@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.4.2
+// @version      3.4.3
 // @description  扩充淡水鱼类与稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.2');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.3');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -177,7 +177,7 @@
     // 海洋与码头鱼类暂时关闭；保留原始数据供日后重新启用。
     const ACTIVE_FISH = FISH_LIST.filter(f => !f.location.startsWith('大海') && f.location !== '码头');
     // 真实鳑鲏种名仅用于钓获文案；鱼篓与背包统一记作「鳑鲏」。
-    const BITTERLING_VARIANTS = ['彩石鳑鲏','高体鳑鲏','中华鳑鲏'];
+    const BITTERLING_VARIANTS = ['彩石鳑鲏','高体鳑鲏'];
     function fishDisplayName(fish){
         if(fish.name==='鳑鲏')return BITTERLING_VARIANTS[Math.floor(Math.random()*BITTERLING_VARIANTS.length)];
         return fish.name;
