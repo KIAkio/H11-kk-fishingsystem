@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.6.0';
+  const VERSION = '1.6.1';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -424,7 +424,7 @@
       '✨ 经验：0',
       '🎒 背包：' + (totalCount || '空')
     ];
-    reply(ctx, msg, (profile.created ? (profile.duplicate ? '当前营地存在同名角色：'+profile.name+'\n为您新建档案：'+profile.name+'，'+profile.id+'，请牢记自己的编号。' : '已为您新建角色档案：'+profile.name+'，'+profile.id) : '当前账号已存在角色：'+profile.name+'（'+profile.id+'），已沿用原档案。')+'\n'+lines.join('\n'));
+    reply(ctx, msg, (profile.created ? (profile.duplicate ? '当前营地存在同名角色：'+profile.name+'\n为您新建档案：'+profile.name+'，'+profile.id+'，请牢记自己的编号。' : '已为您新建角色档案：'+profile.name+'，'+profile.id) : '当前账号已存在角色：'+profile.name+'（'+profile.id+'），已沿用原档案。')+'\n'+lines.join('\n')+'\n❄️'+profile.name+'同学，欢迎来到圣布里吉冬训营❄️');
   });
 
   registerCommand('营地名单','查看当前营地全部角色',(ctx,msg)=>{
