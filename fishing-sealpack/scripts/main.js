@@ -2,8 +2,8 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.4.0
-// @description  扩充淡水鱼类、颜色变体与稀有度抽取、两秒钓鱼、背包与排行榜
+// @version      3.4.1
+// @description  扩充淡水鱼类与稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
 (function () {
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.0');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.1');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -121,73 +121,61 @@
         {id:78,name:'皇带鱼',english:'Oarfish',rarity:'Rare',location:'大海',shadow:'巨大'},
         {id:79,name:'桶眼鱼',english:'Barreleye',rarity:'Rare',location:'大海',shadow:'小'},
         {id:80,name:'矛尾鱼',english:'Coelacanth',rarity:'Rare',location:'大海（雨天）',shadow:'巨大'},
-        {id:81,name:'草鱼',english:'',rarity:'Common',location:'河流',shadow:'大',colors:["银白","青灰"]},
-        {id:82,name:'青鱼',english:'',rarity:'Common',location:'河流',shadow:'大',colors:["青灰","灰黑"]},
-        {id:83,name:'鲢鱼',english:'',rarity:'Common',location:'河流',shadow:'大',colors:["银白","银灰"]},
-        {id:84,name:'鳙鱼',english:'',rarity:'Common',location:'河流',shadow:'特大',colors:["灰黑","银灰"]},
-        {id:85,name:'鳊鱼',english:'',rarity:'Common',location:'河流',shadow:'中',colors:["银灰","银白"]},
-        {id:86,name:'鲂鱼',english:'',rarity:'Common',location:'河流',shadow:'中',colors:["银白","青灰"]},
-        {id:87,name:'翘嘴鲌',english:'',rarity:'Common',location:'河流',shadow:'中',colors:["银白","银灰"]},
-        {id:88,name:'蒙古鲌',english:'',rarity:'Common',location:'河流',shadow:'中',colors:["青灰","银白"]},
-        {id:89,name:'餐条',english:'',rarity:'Common',location:'河流',shadow:'小',colors:["银白","银灰"]},
-        {id:90,name:'马口鱼',english:'',rarity:'Common',location:'溪流',shadow:'小',colors:["银白","青绿"]},
-        {id:91,name:'宽鳍鱲',english:'',rarity:'Common',location:'溪流',shadow:'小',colors:["青绿","银白"]},
-        {id:92,name:'赤眼鳟',english:'',rarity:'Common',location:'河流',shadow:'中',colors:["银白","银灰"]},
-        {id:93,name:'鳡鱼',english:'',rarity:'Uncommon',location:'河流',shadow:'特大',colors:["青灰","银白"]},
-        {id:94,name:'大鳞副泥鳅',english:'',rarity:'Common',location:'河流',shadow:'小',colors:["黑褐","黄褐"]},
-        {id:95,name:'黄颡鱼',english:'',rarity:'Common',location:'河流',shadow:'中',colors:["黄褐","青灰"]},
-        {id:96,name:'瓦氏黄颡鱼',english:'',rarity:'Common',location:'河流',shadow:'中',colors:["青灰","黄褐"]},
-        {id:97,name:'沙塘鳢',english:'',rarity:'Common',location:'河流',shadow:'小',colors:["青褐","黄褐"]},
-        {id:98,name:'棒花鱼',english:'',rarity:'Common',location:'溪流',shadow:'小',colors:["灰褐","青灰"]},
-        {id:99,name:'麦穗鱼',english:'',rarity:'Common',location:'河流',shadow:'小',colors:["银灰","银白"]},
-        {id:100,name:'鳑鲏',english:'',rarity:'Common',location:'河流',shadow:'极小',colors:["青灰","银白"]},
-        {id:101,name:'中华鳑鲏',english:'',rarity:'Common',location:'河流',shadow:'极小',colors:["银白","青绿"]},
-        {id:102,name:'鱊鱼',english:'',rarity:'Common',location:'河流',shadow:'小',colors:["银灰","青灰"]},
-        {id:103,name:'南瓜籽太阳鱼',english:'',rarity:'Common',location:'湖泊',shadow:'小',colors:["橙腹","青绿"]},
-        {id:104,name:'杜父鱼',english:'',rarity:'Common',location:'溪流',shadow:'小',colors:["灰褐","青灰"]},
-        {id:105,name:'虾虎鱼',english:'',rarity:'Common',location:'河流',shadow:'小',colors:["黄褐","灰褐"]},
-        {id:106,name:'胡瓜鱼',english:'',rarity:'Common',location:'冷水河流',shadow:'小',colors:["银白","银灰"]},
-        {id:107,name:'鳟鲈',english:'',rarity:'Uncommon',location:'湖泊',shadow:'大',colors:["银白","青灰"]},
-        {id:108,name:'镜鲤',english:'',rarity:'Common',location:'湖泊',shadow:'大',colors:["金黄","青灰"]},
-        {id:109,name:'丁鱥',english:'',rarity:'Common',location:'湖泊',shadow:'中',colors:["银灰","金黄"]},
-        {id:110,name:'大口黑鲈',english:'',rarity:'Common',location:'湖泊',shadow:'大',colors:["灰绿","青灰"]},
-        {id:111,name:'小口黑鲈',english:'',rarity:'Common',location:'湖泊',shadow:'中',colors:["深绿","灰绿"]},
-        {id:112,name:'银汉鱼',english:'',rarity:'Common',location:'湖泊',shadow:'小',colors:["银白","银灰"]},
-        {id:113,name:'虹鳟',english:'',rarity:'Common',location:'冷水河流',shadow:'中',colors:["银白","粉红","金黄"]},
-        {id:114,name:'褐鳟',english:'',rarity:'Common',location:'冷水河流',shadow:'中',colors:["银灰","金黄","红点"]},
-        {id:115,name:'溪红点鲑',english:'',rarity:'Uncommon',location:'冷水河流',shadow:'中',colors:["银白","橙腹"]},
-        {id:116,name:'湖红点鲑',english:'',rarity:'Uncommon',location:'湖泊',shadow:'大',colors:["银灰","青灰"]},
-        {id:117,name:'北极红点鲑',english:'',rarity:'Uncommon',location:'冷水湖泊',shadow:'中',colors:["银白","橙红"]},
-        {id:118,name:'大西洋鲑',english:'',rarity:'Uncommon',location:'河口',shadow:'大',colors:["银白","银灰"]},
-        {id:119,name:'驼背大麻哈鱼',english:'',rarity:'Common',location:'河口',shadow:'大',colors:["粉红","银白"]},
-        {id:120,name:'银大麻哈鱼',english:'',rarity:'Common',location:'河口',shadow:'大',colors:["银白","银灰"]},
-        {id:121,name:'红大麻哈鱼',english:'',rarity:'Uncommon',location:'河口',shadow:'大',colors:["红褐","银灰"]},
-        {id:122,name:'狗大麻哈鱼',english:'',rarity:'Common',location:'河口',shadow:'大',colors:["银白","青灰"]},
-        {id:123,name:'茴鱼',english:'',rarity:'Common',location:'冷水河流',shadow:'中',colors:["青灰","银白"]},
-        {id:124,name:'北极茴鱼',english:'',rarity:'Uncommon',location:'冷水河流',shadow:'中',colors:["银白","银灰"]},
-        {id:125,name:'白鲑',english:'',rarity:'Common',location:'冷水湖泊',shadow:'中',colors:["银灰","银白"]},
-        {id:126,name:'湖白鲑',english:'',rarity:'Common',location:'冷水湖泊',shadow:'中',colors:["银白","银灰"]},
-        {id:127,name:'秋白鲑',english:'',rarity:'Common',location:'冷水河流',shadow:'中',colors:["银白","银灰"]},
-        {id:128,name:'哲罗鱼',english:'',rarity:'Rare',location:'冷水河流',shadow:'巨大',colors:["银灰","青褐"]},
-        {id:129,name:'细鳞鲑',english:'',rarity:'Uncommon',location:'冷水河流',shadow:'中',colors:["银灰","青灰"]},
-        {id:130,name:'江鳕',english:'',rarity:'Common',location:'冷水湖泊',shadow:'大',colors:["银灰","黄褐"]},
-        {id:131,name:'白斑狗鱼',english:'',rarity:'Uncommon',location:'湖泊',shadow:'特大',colors:["灰绿","黄绿"]}
+        {id:81,name:'草鱼',english:'',rarity:'Common',location:'河流',shadow:'大'},
+        {id:82,name:'青鱼',english:'',rarity:'Common',location:'河流',shadow:'大'},
+        {id:83,name:'鲢鱼',english:'',rarity:'Common',location:'河流',shadow:'大'},
+        {id:84,name:'鳙鱼',english:'',rarity:'Common',location:'河流',shadow:'特大'},
+        {id:85,name:'鳊鱼',english:'',rarity:'Common',location:'河流',shadow:'中'},
+        {id:86,name:'鲂鱼',english:'',rarity:'Common',location:'河流',shadow:'中'},
+        {id:87,name:'翘嘴鲌',english:'',rarity:'Common',location:'河流',shadow:'中'},
+        {id:88,name:'蒙古鲌',english:'',rarity:'Common',location:'河流',shadow:'中'},
+        {id:89,name:'餐条',english:'',rarity:'Common',location:'河流',shadow:'小'},
+        {id:90,name:'马口鱼',english:'',rarity:'Common',location:'溪流',shadow:'小'},
+        {id:91,name:'宽鳍鱲',english:'',rarity:'Common',location:'溪流',shadow:'小'},
+        {id:92,name:'赤眼鳟',english:'',rarity:'Common',location:'河流',shadow:'中'},
+        {id:93,name:'鳡鱼',english:'',rarity:'Uncommon',location:'河流',shadow:'特大'},
+        {id:94,name:'大鳞副泥鳅',english:'',rarity:'Common',location:'河流',shadow:'小'},
+        {id:95,name:'黄颡鱼',english:'',rarity:'Common',location:'河流',shadow:'中'},
+        {id:96,name:'瓦氏黄颡鱼',english:'',rarity:'Common',location:'河流',shadow:'中'},
+        {id:97,name:'沙塘鳢',english:'',rarity:'Common',location:'河流',shadow:'小'},
+        {id:98,name:'棒花鱼',english:'',rarity:'Common',location:'溪流',shadow:'小'},
+        {id:99,name:'麦穗鱼',english:'',rarity:'Common',location:'河流',shadow:'小'},
+        {id:100,name:'鳑鲏',english:'',rarity:'Common',location:'河流',shadow:'极小'},
+        {id:101,name:'中华鳑鲏',english:'',rarity:'Common',location:'河流',shadow:'极小'},
+        {id:102,name:'鱊鱼',english:'',rarity:'Common',location:'河流',shadow:'小'},
+        {id:103,name:'南瓜籽太阳鱼',english:'',rarity:'Common',location:'湖泊',shadow:'小'},
+        {id:104,name:'杜父鱼',english:'',rarity:'Common',location:'溪流',shadow:'小'},
+        {id:105,name:'虾虎鱼',english:'',rarity:'Common',location:'河流',shadow:'小'},
+        {id:106,name:'胡瓜鱼',english:'',rarity:'Common',location:'冷水河流',shadow:'小'},
+        {id:107,name:'鳟鲈',english:'',rarity:'Uncommon',location:'湖泊',shadow:'大'},
+        {id:108,name:'镜鲤',english:'',rarity:'Common',location:'湖泊',shadow:'大'},
+        {id:109,name:'丁鱥',english:'',rarity:'Common',location:'湖泊',shadow:'中'},
+        {id:110,name:'大口黑鲈',english:'',rarity:'Common',location:'湖泊',shadow:'大'},
+        {id:111,name:'小口黑鲈',english:'',rarity:'Common',location:'湖泊',shadow:'中'},
+        {id:112,name:'银汉鱼',english:'',rarity:'Common',location:'湖泊',shadow:'小'},
+        {id:113,name:'虹鳟',english:'',rarity:'Common',location:'冷水河流',shadow:'中'},
+        {id:114,name:'褐鳟',english:'',rarity:'Common',location:'冷水河流',shadow:'中'},
+        {id:115,name:'溪红点鲑',english:'',rarity:'Uncommon',location:'冷水河流',shadow:'中'},
+        {id:116,name:'湖红点鲑',english:'',rarity:'Uncommon',location:'湖泊',shadow:'大'},
+        {id:117,name:'北极红点鲑',english:'',rarity:'Uncommon',location:'冷水湖泊',shadow:'中'},
+        {id:118,name:'大西洋鲑',english:'',rarity:'Uncommon',location:'河口',shadow:'大'},
+        {id:119,name:'驼背大麻哈鱼',english:'',rarity:'Common',location:'河口',shadow:'大'},
+        {id:120,name:'银大麻哈鱼',english:'',rarity:'Common',location:'河口',shadow:'大'},
+        {id:121,name:'红大麻哈鱼',english:'',rarity:'Uncommon',location:'河口',shadow:'大'},
+        {id:122,name:'狗大麻哈鱼',english:'',rarity:'Common',location:'河口',shadow:'大'},
+        {id:123,name:'茴鱼',english:'',rarity:'Common',location:'冷水河流',shadow:'中'},
+        {id:124,name:'北极茴鱼',english:'',rarity:'Uncommon',location:'冷水河流',shadow:'中'},
+        {id:125,name:'白鲑',english:'',rarity:'Common',location:'冷水湖泊',shadow:'中'},
+        {id:126,name:'湖白鲑',english:'',rarity:'Common',location:'冷水湖泊',shadow:'中'},
+        {id:127,name:'秋白鲑',english:'',rarity:'Common',location:'冷水河流',shadow:'中'},
+        {id:128,name:'哲罗鱼',english:'',rarity:'Rare',location:'冷水河流',shadow:'巨大'},
+        {id:129,name:'细鳞鲑',english:'',rarity:'Uncommon',location:'冷水河流',shadow:'中'},
+        {id:130,name:'江鳕',english:'',rarity:'Common',location:'冷水湖泊',shadow:'大'},
+        {id:131,name:'白斑狗鱼',english:'',rarity:'Uncommon',location:'湖泊',shadow:'特大'}
     ];
 
     // 海洋与码头鱼类暂时关闭；保留原始数据供日后重新启用。
     const ACTIVE_FISH = FISH_LIST.filter(f => !f.location.startsWith('大海') && f.location !== '码头');
-    const COLOR_VARIANTS = {
-        '鲫鱼':['银白','金黄'],'鲤鱼':['青灰','金黄'],'锦鲤':['红白','黑白','三色'],
-        '金鱼':['橙红','金黄','黑色','银白'],'泥鳅':['黄褐','黑褐'],
-        '鲶鱼':['灰黑','青灰'],'黄鲈鱼':['黄绿','银灰'],
-        '黑鲈鱼':['灰绿','青灰'],'鲑鱼':['银白','银灰'],
-        '樱花钩吻鲑':['银白','粉红'],'花羔红点鲑':['银白','橙红']
-    };
-    function displayFishName(fish){
-        const colors=fish.colors||COLOR_VARIANTS[fish.name];
-        return colors&&colors.length?colors[Math.floor(Math.random()*colors.length)]+fish.name:fish.name;
-    }
-
     // 读取存档
     function loadData() {
         try {
@@ -507,7 +495,7 @@
                     }
 
                     const result = catchFish(player, fish);
-                    result.displayName=displayFishName(fish);
+                    result.displayName=fish.name;
 
                     // 同步到跨群共享背包；旧钓鱼存档继续保留图鉴和排行榜。
                     addFishToSharedBackpack(ctx, player, fish);
