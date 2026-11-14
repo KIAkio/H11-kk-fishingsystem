@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.4.4
+// @version      3.4.5
 // @description  扩充淡水鱼类与稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.4');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.5');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -583,7 +583,37 @@
                 ctx
             );
 
-            const items = Object.values(player.bag).filter(item=>ACTIVE_FISH.some(f=>f.name===item.name));
+            // 图鉴展示全部历史鱼获，关闭的海鱼仍保留；同时补充旧背包中已有但鱼篓未记录的鱼。
+            const itemsByName = new Map();
+            for (const item of Object.values(player.bag || {})) {
+                if (item && item.name && Number(item.count) > 0) itemsByName.set(item.name, Object.assign({}, item));
+            }
+            const roleProfiles = seal.vars.strGet(ctx, '$g地精档案编号表');
+            const roleRaw = Array.isArray(roleProfiles) ? roleProfiles[0] : '';
+            const profiles = roleRaw ? JSON.parse(roleRaw) : {};
+            const uid = getUserId(ctx, msg);
+            const roles = profiles.members && profiles.members[uid];
+            const roleList = Array.isArray(roles) ? roles : roles ? [roles] : [];
+            const selected = roleList.find(x => x.id === (profiles.active || {})[uid]) || roleList[0];
+            const roleId = selected ? String(selected.id).padStart(3, '0') : '';
+            const storeResult = seal.vars.strGet(ctx, '$mH11角色数据仓库');
+            const storeRaw = Array.isArray(storeResult) ? storeResult[0] : '';
+            const store = storeRaw ? JSON.parse(storeRaw) : {};
+            const groupKey = String(ctx.group && (ctx.group.groupId || ctx.group.id) || getGroupId(ctx, msg));
+            const storedFish = ((store[groupKey + '::' + roleId] || {}).items || {}).fish || {};
+            for (const [name, entry] of Object.entries(storedFish)) {
+                if (!entry || Number(entry.count) <= 0 || itemsByName.has(name)) continue;
+                const fish = FISH_LIST.find(f => f.name === name);
+                itemsByName.set(name, {
+                    id: fish ? fish.id : 9999,
+                    name,
+                    count: Number(entry.count),
+                    rarity: fish ? RARITY[fish.rarity].name : '普通',
+                    maxWeight: null,
+                    legacyOnly: true
+                });
+            }
+            const items = Array.from(itemsByName.values());
 
             if (!items.length) {
                 seal.replyToSender(
@@ -598,7 +628,7 @@
 
             const lines = [
                 '🎒 【' + player.name + '的钓鱼图鉴】',
-                '已收集 ' + items.length + ' / ' + ACTIVE_FISH.length + ' 种（当前开放）',
+                '已收集 ' + items.length + ' 种（当前开放 ' + ACTIVE_FISH.length + ' 种，含历史鱼获）',
                 ''
             ];
 
@@ -623,7 +653,7 @@
                     lines.push(
                         item.name + ' ×' + item.count +
                         ' | 最大 ' +
-                        Number(item.maxWeight).toFixed(2) + 'kg'
+                        (Number(item.maxWeight) > 0 ? Number(item.maxWeight).toFixed(2) + 'kg' : '历史记录未保存重量')
                     );
                 }
 
