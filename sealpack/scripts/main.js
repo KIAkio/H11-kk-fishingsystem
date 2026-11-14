@@ -395,10 +395,10 @@
   // 其他玩法指令应在海豹核心的“指令前缀”中统一添加中文标点。
   ext.onNotCommandReceived = (ctx, msg) => {
     const input = String((msg && msg.message) || '').trim();
-    if (/^[。，]指令H11\\s*$/i.test(input)) { reply(ctx,msg,H11_HELP);return; }
-    let match=input.match(/^[.。，]删除h(\\d+)\\s*$/i);
+    if (/^[。，]指令H11\s*$/i.test(input)) { reply(ctx,msg,H11_HELP);return; }
+    let match=input.match(/^[.。，]删除h(\d+)\s*$/i);
     if(match){deleteRequest(ctx,msg,match[1].padStart(3,'0'));return;}
-    match=input.match(/^[.。，]确认删除h(\\d+)\\s*$/i);
+    match=input.match(/^[.。，]确认删除h(\d+)\s*$/i);
     if(match){const key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key],id=match[1].padStart(3,'0');
       if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有有效的待确认删除请求。');return;}
       const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
