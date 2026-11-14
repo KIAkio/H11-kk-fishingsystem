@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.4.3
+// @version      3.4.4
 // @description  扩充淡水鱼类与稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.3');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.4');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -430,7 +430,7 @@
         const f = result.fish;
 
         return [
-            '🎣 【钓鱼结果】',
+            '🎣 【' + (result.playerName||'玩家') + '的钓鱼结果】',
             '',
             '你钓上了：' + (result.displayName||f.name) + '！',
             '稀有度：' + result.rarity.stars +
@@ -503,6 +503,7 @@
 
                     const result = catchFish(player, fish);
                     result.displayName=fishDisplayName(fish);
+                    result.playerName=player.name;
 
                     // 同步到跨群共享背包；旧钓鱼存档继续保留图鉴和排行榜。
                     addFishToSharedBackpack(ctx, player, fish);
