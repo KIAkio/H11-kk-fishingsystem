@@ -1,4 +1,4 @@
-format_version = "1.0.0"
+format_version = "1.0.1"
 
 [package]
 id = "kiakio/h11-all-in-one"
