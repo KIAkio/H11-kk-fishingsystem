@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.3.2
+// @version      3.3.3
 // @description  80种鱼类、稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.2');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.3');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -194,6 +194,22 @@
         }
 
         const p = data.players[key];
+        // 首次读取旧图鉴时就同步历史鱼获，不要求再次钓鱼。
+        if(p.h11LegacyImportPending){
+            const result=seal.vars.strGet(ctx,'$mH11角色数据仓库');
+            const rawStore=Array.isArray(result)?result[0]:'';
+            let store={};if(rawStore){try{store=JSON.parse(rawStore)}catch(e){throw Error('角色背包存档损坏，未迁移历史鱼获。')}}
+            const role=String(ctx.group&&(ctx.group.groupId||ctx.group.id)||groupId)+'::'+String(selected.id).padStart(3,'0');
+            const bag=store[role]||{items:{}};
+            if(!bag.items)bag.items={};
+            if(!bag.items.fish)bag.items.fish={};
+            for(const fish of Object.values(p.bag||{})){
+                if(!bag.items.fish[fish.name])bag.items.fish[fish.name]={count:Math.max(0,Number(fish.count)||0),description:'旧钓鱼图鉴迁移'};
+            }
+            store[role]=bag;
+            seal.vars.strSet(ctx,'$mH11角色数据仓库',JSON.stringify(store));
+            p.h11LegacyImportPending=false;
+        }
         p.name = selected.name || name || p.name;
         if (!p.bag) p.bag = {};
         if (typeof p.rareCount !== 'number') {
@@ -293,13 +309,6 @@
             data.items.fish[fishName] = item;
         }
 
-        // 旧图鉴迁移只在首次归属角色时进行；避免反复导入。
-        if(player.h11LegacyImportPending){
-            for(const oldFish of Object.values(player.bag||{})){
-                if(!data.items.fish[oldFish.name])addOneFish(oldFish.name,oldFish.count,(oldFish.location||'未知水域')+' · '+(oldFish.rarity||'鱼类'));
-            }
-            player.h11LegacyImportPending=false;
-        }
         // 本次钓获写入当前角色。
         addOneFish(caughtFish.name,1,caughtFish.location+' · '+RARITY[caughtFish.rarity].name);
         data.version = 2;
