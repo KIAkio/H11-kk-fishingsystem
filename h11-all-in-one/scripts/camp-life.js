@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.2
+// @version 1.1.3
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.2',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.3',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。']];
@@ -63,18 +63,40 @@ cmd('饱腹','查看饱腹值：.饱腹',(c,m)=>{if(!ok(c)){reply(c,m,'尚未查
 cmd('营地菜单','查看营地早餐菜单：.营地菜单',(c,m)=>reply(c,m,'🥣【营地早餐菜单】\n'+MENU.map(x=>'• '+x[0]+'：'+x[1]).join('\n')));
 cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2—4人，可省略早餐前缀）',(c,m,a)=>{
  if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}
- const foodName=String(a.getArgN(1)||'').trim();
- if(!foodName){reply(c,m,'格式：.共享 营地早餐：食物名称 @同学（总人数2—4人，包含自己）');return}
- if(typeof seal.getCtxProxyAtPos!=='function'){reply(c,m,'当前海豹核心版本不支持多成员分享，请升级核心。');return}
- const participants=[{ctx:c,id:uid(c),name:pname(c)}],seen=new Set([uid(c)]);
- for(let pos=0;pos<3;pos++){
-   let target=null;try{target=seal.getCtxProxyAtPos(c,a,pos)}catch(e){target=null}
-   if(!target||!target.player||!target.player.userId)continue;
-   const tid=String(target.player.userId);
-   if(seen.has(tid))continue;
-   seen.add(tid);participants.push({ctx:target,id:tid,name:target.player.name||tid});
+ const firstArg=String(a.getArgN(1)||'').trim();
+ const foodParts=[];
+ for(let n=1;n<=12;n++){
+   const part=String(a.getArgN(n)||'').trim();
+   if(!part||part.startsWith('@')||part.startsWith('[CQ:at,'))break;
+   foodParts.push(part);
  }
- if(participants.length<2||participants.length>4){reply(c,m,'请 @ 1—3 位同学，分享总人数必须为 2—4 人（包含你自己）。');return}
+ const foodName=foodParts.join(' ').trim()||firstArg;
+ if(!foodName){reply(c,m,'格式：.共享 食物名称 @同学（总人数2—4人，包含自己）');return}
+ const participants=[{ctx:c,id:uid(c),name:pname(c)}],seen=new Set([uid(c)]);
+ function addTarget(target){
+   if(!target||!target.player)return;
+   const tid=String(target.player.userId||target.player.id||'');
+   if(!tid||seen.has(tid))return;
+   seen.add(tid);
+   participants.push({ctx:target,id:tid,name:pname(target)});
+ }
+ // 海豹核心通用接口：先读取第一个 @ 对象。
+ if(typeof seal.getCtxProxyFirst==='function'){
+   try{addTarget(seal.getCtxProxyFirst(c,a))}catch(e){console.log('[冬训营生活] 首个@解析失败：'+e)}
+ }
+ // 部分海豹版本支持按位置读取多个 @ 对象。
+ if(typeof seal.getCtxProxyAtPos==='function'){
+   for(let pos=0;pos<6;pos++){
+     try{addTarget(seal.getCtxProxyAtPos(c,a,pos))}catch(e){}
+   }
+ }
+ if(participants.length<2||participants.length>4){
+   reply(c,m,'没有识别到 1—3 位不同的被@同学。请使用群聊中真正的 @ 功能，例如：.共享 燕麦粥 @同学');
+   return;
+ }
+ for(const participant of participants){
+   if(!ok(participant.ctx)){reply(c,m,'被@的同学「'+participant.name+'」尚未在当前营地注册，无法共享。');return}
+ }
  const states=[];
  for(const p of participants)states.push({participant:p,data:sync(p.ctx)});
  const owner=states[0].data,found=find(owner,foodName);
