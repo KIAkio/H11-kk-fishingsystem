@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.9
+// @version 1.1.10
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.9',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.10',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。']];
@@ -41,7 +41,19 @@ for(let i=0;i<=days;i++){
  }
 }
 d.hungerUpdatedAt=now;
-for(const [n,it] of Object.entries(d.items.other)){if(it&&it.campBreakfast&&+it.expiresAt>0&&+it.expiresAt<=now)delete d.items.other[n]}
+for(const [n,it] of Object.entries(d.items.other)){
+ if(!it||!it.campBreakfast)continue;
+ const count=Math.max(0,Number(it.count)||0);
+ let batches=Array.isArray(it.breakfastBatches)?it.breakfastBatches.filter(b=>b&&Number(b.count)>0):[{count,expiresAt:Number(it.expiresAt)||0}];
+ // 背包中食用或共享可能已减少总数：从最早到期的批次扣除差额。
+ batches.sort((a,b)=>(Number(a.expiresAt)||0)-(Number(b.expiresAt)||0));
+ let excess=batches.reduce((sum,b)=>sum+Number(b.count),0)-count;
+ for(const b of batches){if(excess<=0)break;const take=Math.min(excess,Number(b.count));b.count-=take;excess-=take}
+ batches=batches.filter(b=>Number(b.count)>0&&(!Number(b.expiresAt)||Number(b.expiresAt)>now));
+ it.count=batches.reduce((sum,b)=>sum+Number(b.count),0);
+ if(it.count<=0)delete d.items.other[n];
+ else {it.breakfastBatches=batches;it.expiresAt=Math.min(...batches.map(b=>Number(b.expiresAt)||Infinity))}
+}
 save(c,d);return d
 }
 function nextEight(){const x=bj(new Date());return boundary(x.getUTCFullYear(),x.getUTCMonth()+1,x.getUTCDate()+1,8)}
@@ -65,7 +77,16 @@ const r=read(c,ATT,{lastDate:'',count:0}),today=day(now);if(r.lastDate===today){
 r.lastDate=today;r.count=(+r.count||0)+1;write(c,ATT,r);
 const rank=read(c,RANK,{members:{}});rank.members[uid(c)+'::'+role(c)]={name:pname(c),count:r.count};write(c,RANK,rank);
 const d=sync(c),a=MENU[Math.floor(Math.random()*MENU.length)],twice=Math.random()<.1,b=twice?MENU[Math.floor(Math.random()*MENU.length)]:null;
-function add(x){const n='营地早餐：'+x[0],v=d.items.other[n]||{count:0};v.count=(+v.count||0)+1;v.description=x[1];v.campBreakfast=true;v.hungerRestore=3;v.hpRestore=1;v.expiresAt=nextEight();d.items.other[n]=v}
+function add(x){
+ const n='营地早餐：'+x[0],v=d.items.other[n]||{count:0};
+ const oldCount=Math.max(0,Number(v.count)||0);
+ const batches=Array.isArray(v.breakfastBatches)?v.breakfastBatches:[{count:oldCount,expiresAt:Number(v.expiresAt)||0}];
+ const expiration=nextEight();
+ batches.push({count:1,expiresAt:expiration});
+ v.count=oldCount+1;v.description=x[1];v.campBreakfast=true;v.hungerRestore=3;v.hpRestore=1;
+ v.breakfastBatches=batches;v.expiresAt=Math.min(...batches.filter(b=>Number(b.count)>0).map(b=>Number(b.expiresAt)||Infinity));
+ d.items.other[n]=v
+}
 add(a);if(b)add(b);save(c,d);
 let out='今日已打卡。'+greeting+'\n🎫累计数：'+r.count+'\n\n营地早餐：'+a[0];out+=twice?'，'+b[0]+'\n\n不知为何，领到了两份早餐，不过教官说没事可以多吃一点。留着或者分给其他同学都是很好的选择。':'\n'+a[1];reply(c,m,out)
 });
