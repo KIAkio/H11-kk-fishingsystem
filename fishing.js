@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.3.0
+// @version      3.3.1
 // @description  80种鱼类、稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.0');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.1');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -163,10 +163,16 @@
     }
 
     // 创建或读取玩家
-    function getPlayer(data, groupId, userId, name) {
+    function getPlayer(data, groupId, userId, name, ctx) {
         if (!data.players) data.players = {};
 
-        const key = groupId + ':' + userId;
+        const pr=seal.vars.strGet(ctx,'$g地精档案编号表'),raw=Array.isArray(pr)?pr[0]:'';
+        if(!raw)throw Error('请先注册营地角色。');
+        let profiles;try{profiles=JSON.parse(raw)}catch(e){throw Error('营地档案存档损坏。')}
+        const own=profiles.members&&profiles.members[userId],arr=Array.isArray(own)?own:own?[own]:[];
+        const selected=arr.find(x=>x.id===(profiles.active||{})[userId])||arr[0];
+        if(!selected)throw Error('请先注册营地角色。');
+        const key = groupId + ':' + userId + ':' + String(selected.id).padStart(3,'0');
 
         if (!data.players[key]) {
             data.players[key] = {
@@ -403,7 +409,8 @@
                         data,
                         groupId,
                         userId,
-                        name
+                        name,
+                        ctx
                     );
 
                     const fish = weightedRandom(FISH_LIST);
@@ -449,7 +456,8 @@
                 data,
                 getGroupId(ctx, msg),
                 getUserId(ctx, msg),
-                getUserName(ctx, msg)
+                getUserName(ctx, msg),
+                ctx
             );
 
             saveData(data);
@@ -487,7 +495,8 @@
                 data,
                 getGroupId(ctx, msg),
                 getUserId(ctx, msg),
-                getUserName(ctx, msg)
+                getUserName(ctx, msg),
+                ctx
             );
 
             const items = Object.values(player.bag);
