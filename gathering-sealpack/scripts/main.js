@@ -9,7 +9,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_gathering_system';
-  const VERSION = '1.0.2';
+  const VERSION = '1.1.0';
   const DATA_VAR = '$m地精背包数据';
 
   if (seal.ext.find(EXT_ID)) {
