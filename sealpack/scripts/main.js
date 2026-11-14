@@ -10,10 +10,12 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.5.8';
+  const VERSION = '1.6.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
+  const ROLE_STORE = '$mH11角色数据仓库';
+  const ROLE_ACTIVE = '$mH11当前角色索引';
 
   // 物品分类名称。其他玩法接入时也使用这些分类键。
   const CATEGORY = {
@@ -166,89 +168,102 @@
     return data;
   }
 
-  // 使用海豹个人变量 $m 保存数据：同一玩家跨群共享，也能被其他 JS 插件读取。
-  function loadData(ctx) {
-    if (!seal.vars || typeof seal.vars.strGet !== 'function') {
-      throw new Error('当前海豹核心不支持 seal.vars.strGet，请升级核心后再使用。');
-    }
-
-    const result = seal.vars.strGet(ctx, DATA_VAR);
-    const raw = Array.isArray(result) ? result[0] : '';
-    if (!raw) return createDefaultData();
-
-    try {
-      return applyLifeTicks(normalizeData(JSON.parse(raw)));
-    } catch (e) {
-      console.log('[地精背包] 存档解析失败：' + e);
-      return createDefaultData();
-    }
-  }
-
-  function saveData(ctx, data) {
-    if (!seal.vars || typeof seal.vars.strSet !== 'function') {
-      throw new Error('当前海豹核心不支持 seal.vars.strSet，请升级核心后再使用。');
-    }
-    seal.vars.strSet(ctx, DATA_VAR, JSON.stringify(normalizeData(data)));
-  }
-
-
   function getPlayerId(ctx) {
     return String(ctx.player && (ctx.player.userId || ctx.player.id) || '').trim();
   }
-
+  function groupKey(ctx) {
+    return String(ctx.group && (ctx.group.groupId || ctx.group.id) || 'private');
+  }
+  function jsonRead(ctx, key, fallback) {
+    const r = seal.vars.strGet(ctx, key), raw = Array.isArray(r) ? r[0] : '';
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch (e) { throw new Error('存档 '+key+' 解析失败，已停止写入以保护数据。'); }
+  }
+  function jsonWrite(ctx, key, value) { seal.vars.strSet(ctx, key, JSON.stringify(value)); }
   function loadGroupProfiles(ctx) {
-    if (!seal.vars || typeof seal.vars.strGet !== 'function') {
-      throw new Error('当前海豹核心不支持群变量存档。');
+    const p = jsonRead(ctx, GROUP_PROFILE_VAR, { nextId: 0, members: {}, active: {} });
+    if (!p.members || typeof p.members !== 'object') p.members = {};
+    if (!p.active || typeof p.active !== 'object') p.active = {};
+    let highest = -1;
+    for (const uid of Object.keys(p.members)) {
+      const old = p.members[uid];
+      const list = Array.isArray(old) ? old : old ? [old] : [];
+      p.members[uid] = list.map(x => typeof x === 'string' ? {id:x,name:''} : x).filter(x=>x && x.id != null).map(x=>({id:String(x.id).padStart(3,'0'),name:String(x.name||'')}));
+      for (const x of p.members[uid]) { const n=Number(x.id); if(Number.isInteger(n))highest=Math.max(highest,n); }
+      if (!p.active[uid] && p.members[uid].length) p.active[uid] = p.members[uid][0].id;
     }
-    const result = seal.vars.strGet(ctx, GROUP_PROFILE_VAR);
-    const raw = Array.isArray(result) ? result[0] : '';
-    if (!raw) return { nextId: 0, members: {} };
-    try {
-      const parsed = JSON.parse(raw);
-      const members = parsed.members && typeof parsed.members === 'object' ? parsed.members : {};
-      for (const [uid, record] of Object.entries(members)) {
-        if (typeof record === 'string') members[uid] = { id: record, name: '' };
-        else if (!record || typeof record !== 'object') members[uid] = { id: '', name: '' };
-      }
-      return { nextId: Math.max(0, Number(parsed.nextId) || 0), members };
-    } catch (e) {
-      console.log('[地精背包] 群档案编号表损坏：' + e);
-      return { nextId: 0, members: {} };
+    p.nextId = Math.max(0, Number(p.nextId)||0, highest+1);
+    return p;
+  }
+  function saveGroupProfiles(ctx,p) { jsonWrite(ctx,GROUP_PROFILE_VAR,p); }
+  function currentRole(ctx) {
+    const p=loadGroupProfiles(ctx),uid=getPlayerId(ctx);
+    return (p.members[uid]||[]).find(x=>x.id===p.active[uid]) || null;
+  }
+  function roleKey(ctx, id) { return groupKey(ctx)+'::'+String(id); }
+  function activeKey(ctx) { return groupKey(ctx); }
+  function loadData(ctx) {
+    const role=currentRole(ctx);
+    if (!role) throw new Error('请先使用 .注册 姓名 创建营地角色。');
+    const store=jsonRead(ctx,ROLE_STORE,{});
+    const key=roleKey(ctx,role.id);
+    if (!Object.prototype.hasOwnProperty.call(store,key)) {
+      const legacy=jsonRead(ctx,DATA_VAR,null);
+      const migration=jsonRead(ctx,'$mH11旧存档迁移标记',{});
+      // 旧个人背包仅分配给首次访问的角色，避免复制给每个新角色。
+      if (legacy && !migration.done) {
+        store[key]=legacy;
+        migration.done=true;
+        migration.destination=key;
+        jsonWrite(ctx,'$mH11旧存档迁移标记',migration);
+      } else store[key]=createDefaultData();
+      jsonWrite(ctx,ROLE_STORE,store);
     }
+    return applyLifeTicks(normalizeData(store[key]));
   }
-
-  function saveGroupProfiles(ctx, data) {
-    seal.vars.strSet(ctx, GROUP_PROFILE_VAR, JSON.stringify(data));
+  function saveData(ctx,data) {
+    const role=currentRole(ctx);
+    if (!role) throw new Error('请先注册角色。');
+    const store=jsonRead(ctx,ROLE_STORE,{});
+    store[roleKey(ctx,role.id)]=normalizeData(data);
+    jsonWrite(ctx,ROLE_STORE,store);
   }
-
   function getOrCreateGroupProfile(ctx, registeredName) {
-    const userId = getPlayerId(ctx);
-    if (!userId) throw new Error('无法读取你的平台用户 ID。');
-    const profiles = loadGroupProfiles(ctx);
-    const platformName = String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
-    const customName = String(registeredName || '').trim();
-    if (profiles.members[userId]) {
-      const record = profiles.members[userId];
-      if (customName) record.name = customName;
-      if (!record.name) record.name = platformName;
-      saveGroupProfiles(ctx, profiles);
-      return { id: record.id, name: record.name, created: false };
+    const uid=getPlayerId(ctx);
+    if(!uid)throw new Error('无法读取你的平台用户 ID。');
+    const p=loadGroupProfiles(ctx),name=String(registeredName||'').trim();
+    if(!name)throw new Error('请输入角色名，例如：.注册 埃莱');
+    const mine=p.members[uid]||[];
+    let role=mine.find(x=>x.name===name);
+    const created=!role;
+    const duplicate=created && Object.keys(p.members).some(u=>u!==uid && p.members[u].some(x=>x.name===name));
+    if(!role){
+      role={id:String(p.nextId++).padStart(3,'0'),name};
+      mine.push(role);p.members[uid]=mine;
     }
-    const id = String(profiles.nextId).padStart(3, '0');
-    const name = customName || platformName;
-    profiles.members[userId] = { id, name };
-    profiles.nextId += 1;
-    saveGroupProfiles(ctx, profiles);
-    return { id, name, created: true };
+    p.active[uid]=role.id;
+    saveGroupProfiles(ctx,p);
+    return {id:role.id,name:role.name,created,duplicate};
   }
-
   function getRegisteredName(ctx) {
-    const userId = getPlayerId(ctx);
-    if (!userId) return String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
-    const profiles = loadGroupProfiles(ctx);
-    const record = profiles.members[userId];
-    if (record && typeof record === 'object' && record.name) return record.name;
-    return String(ctx.player && ctx.player.name || '冒险者').trim() || '冒险者';
+    const r=currentRole(ctx);
+    return r ? r.name : String(ctx.player && ctx.player.name || '冒险者');
+  }
+  function selectRole(ctx, id) {
+    const p=loadGroupProfiles(ctx),uid=getPlayerId(ctx),r=(p.members[uid]||[]).find(x=>x.id===id);
+    if(!r)return null;
+    p.active[uid]=r.id;saveGroupProfiles(ctx,p);return r;
+  }
+  function deleteRole(ctx, owner, role) {
+    const p=loadGroupProfiles(ctx),list=p.members[owner]||[];
+    p.members[owner]=list.filter(x=>x.id!==role.id);
+    if(p.active[owner]===role.id)p.active[owner]=p.members[owner].length?p.members[owner][0].id:'';
+    saveGroupProfiles(ctx,p);
+    if(owner===getPlayerId(ctx)){
+      const store=jsonRead(ctx,ROLE_STORE,{});
+      delete store[roleKey(ctx,role.id)];jsonWrite(ctx,ROLE_STORE,store);
+    }
+    return p;
   }
 
   function getCategoryKey(input) {
@@ -343,7 +358,11 @@
   const H11_HELP = [
     '📖【H11 指令查询表】',
     '【档案与背包】',
-    '.注册 [姓名] — 建立档案或更新姓名',
+    '.注册 姓名 — 注册或沿用同名角色',
+    '.营地名单 — 查看本营地角色',
+    '.我的档案 — 查看自己在本营地的角色',
+    '.切换 编号 — 切换角色',
+    '.删除h编号 / .删除 姓名 — 删除角色（需确认）',
     '.背包 [鱼类/蘑菇/浆果/日用品/训练装备/其他] — 查看背包',
     '.状态 — 查看 HP 与饱腹值',
     '.食用 食物名 — 食用背包物品',
@@ -376,7 +395,17 @@
   // 其他玩法指令应在海豹核心的“指令前缀”中统一添加中文标点。
   ext.onNotCommandReceived = (ctx, msg) => {
     const input = String((msg && msg.message) || '').trim();
-    if (/^[。，]指令H11\s*$/i.test(input)) reply(ctx, msg, H11_HELP);
+    if (/^[。，]指令H11\\s*$/i.test(input)) { reply(ctx,msg,H11_HELP);return; }
+    let match=input.match(/^[.。，]删除h(\\d+)\\s*$/i);
+    if(match){deleteRequest(ctx,msg,match[1].padStart(3,'0'));return;}
+    match=input.match(/^[.。，]确认删除h(\\d+)\\s*$/i);
+    if(match){const key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key],id=match[1].padStart(3,'0');
+      if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有有效的待确认删除请求。');return;}
+      const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
+      if(!r){reply(ctx,msg,'角色已不存在。');return;}
+      if(pending.owner!==getPlayerId(ctx)&&Number(ctx.privilegeLevel)<50){reply(ctx,msg,'权限不足。');return;}
+      deleteRole(ctx,pending.owner,r);delete pendingDeletes[key];reply(ctx,msg,'已删除：'+r.name+'（'+r.id+'）');
+    }
   };
 
   registerCommand('注册', '建立档案：.注册 姓名', (ctx, msg, args) => {
@@ -395,9 +424,56 @@
       '✨ 经验：0',
       '🎒 背包：' + (totalCount || '空')
     ];
-    reply(ctx, msg, lines.join(String.fromCharCode(10)));
+    reply(ctx, msg, (profile.created ? (profile.duplicate ? '当前营地存在同名角色：'+profile.name+'\n为您新建档案：'+profile.name+'，'+profile.id+'，请牢记自己的编号。' : '已为您新建角色档案：'+profile.name+'，'+profile.id) : '当前账号已存在角色：'+profile.name+'（'+profile.id+'），已沿用原档案。')+'\n'+lines.join('\n'));
   });
 
+  registerCommand('营地名单','查看当前营地全部角色',(ctx,msg)=>{
+    const p=loadGroupProfiles(ctx),rows=[];
+    for(const [uid,list] of Object.entries(p.members))for(const r of list)rows.push(r.id+'｜'+r.name+'｜'+uid);
+    rows.sort((a,b)=>Number(a.slice(0,3))-Number(b.slice(0,3)));
+    reply(ctx,msg,'🏕️【营地名单】\n'+(rows.length?rows.join('\n'):'暂无注册角色'));
+  });
+  registerCommand('我的档案','查看本营地自己的角色',(ctx,msg)=>{
+    const p=loadGroupProfiles(ctx),uid=getPlayerId(ctx),list=p.members[uid]||[];
+    reply(ctx,msg,'📋【我的营地档案】\n'+(list.length?list.map(x=>x.id+'｜'+x.name+(p.active[uid]===x.id?'（当前）':'')).join('\n'):'尚未注册'));
+  });
+  registerCommand('切换','切换角色：.切换 001',(ctx,msg,args)=>{
+    const id=String(args.getArgN(1)||'').trim().replace(/^h/i,'').padStart(3,'0');
+    const r=selectRole(ctx,id);
+    reply(ctx,msg,r?'已切换至：'+r.name+'（'+r.id+'）':'未找到你拥有的角色编号：'+id);
+  });
+  const pendingDeletes={};
+  function deleteRequest(ctx,msg,selector,args){
+    const p=loadGroupProfiles(ctx),self=getPlayerId(ctx),at=String(args && args.getArgN(2)||'');
+    let owner=self;
+    if(at.startsWith('@')){
+      if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'只有管理员可以删除他人的角色。');return;}
+      const target=seal.getCtxProxyFirst(ctx,args);
+      if(!target||!target.player||!target.player.userId){reply(ctx,msg,'无法识别目标玩家。');return;}
+      owner=String(target.player.userId);
+    }
+    const matches=(p.members[owner]||[]).filter(r=>r.id===selector || r.name===selector);
+    if(matches.length!==1){reply(ctx,msg,matches.length?'存在同名角色，请使用编号删除。':'未找到符合条件的角色。');return;}
+    const r=matches[0],key=groupKey(ctx)+'::'+self;
+    pendingDeletes[key]={owner,id:r.id,expires:Date.now()+120000};
+    reply(ctx,msg,'⚠️ 将删除「'+r.name+'」（'+r.id+'）。请在两分钟内发送：.确认删除h'+r.id);
+  }
+  registerCommand('删除','按角色名删除：.删除 埃莱',(ctx,msg,args)=>{
+    const name=String(args.getArgN(1)||'').trim();
+    if(!name){reply(ctx,msg,'格式：.删除 角色名');return;}
+    deleteRequest(ctx,msg,name,args);
+  });
+  // 海豹命令名通常按空格拆分；无空格的「删除h001」由非指令回调识别。
+  registerCommand('确认删除h','确认删除：.确认删除h 001',(ctx,msg,args)=>{
+    const id=String(args.getArgN(1)||'').trim().padStart(3,'0');
+    const key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key];
+    if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有待确认的删除请求，或已过期。');return;}
+    const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
+    if(!r){delete pendingDeletes[key];reply(ctx,msg,'角色已不存在。');return;}
+    if(pending.owner!==getPlayerId(ctx)&&Number(ctx.privilegeLevel)<50){reply(ctx,msg,'权限不足。');return;}
+    deleteRole(ctx,pending.owner,r);delete pendingDeletes[key];
+    reply(ctx,msg,'已删除角色：'+r.name+'（'+r.id+'）。');
+  });
   registerCommand('背包', '查看背包：.背包 / .背包 鱼类、蘑菇、浆果、日用品、训练装备、其他', (ctx, msg, args) => {
     const data = loadData(ctx);
     saveData(ctx, data);
