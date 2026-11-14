@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.3
+// @version      1.8.4
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.3';
+  const VERSION = '1.8.4';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -596,14 +596,14 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【发放 v1.8.3】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放 v1.8.4】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const queue=jsonRead(ctx,'$gH11待发放物品',{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(ctx,'$gH11待发放物品',queue);
-    reply(ctx,msg,'🎁【发放 v1.8.3】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    reply(ctx,msg,'🎁【发放 v1.8.4】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
   registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
@@ -629,6 +629,8 @@
       '\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4');
   });
 
+  // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
+  const CAMP_BREAKFAST_NAMES = new Set(['薄煎饼','燕麦粥','荞麦粥','三明治','鸡蛋面糊煎饼','牛肉蔬菜面','一盘杂粮','面','南瓜松饼','鸡蛋全家','滑蛋贝果']);
   registerCommand('食用', '食用背包中的食物：.食用 食物名称（营地早餐可省略前缀）', (ctx, msg, args) => {
     const requested = String(args.getArgN(1) || '').trim();
     if (!requested) {
@@ -658,7 +660,8 @@
       reply(ctx, msg, '背包里没有「' + requested + '」。');
       return;
     }
-    if (!effect && !item.campBreakfast && !Number.isFinite(Number(item.hungerRestore))) {
+    const isBreakfast = Boolean(item.campBreakfast) || CAMP_BREAKFAST_NAMES.has(foundName.replace(/^营地早餐：/, ''));
+    if (!effect && !isBreakfast && !Number.isFinite(Number(item.hungerRestore))) {
       reply(ctx, msg, '目前没有为「' + requested + '」设置食用效果，暂时不能食用。');
       return;
     }
@@ -669,7 +672,7 @@
       data.hp = Math.max(0, Math.min(data.maxHp, data.hp + Number(effect.hp || 0)));
     } else {
       data.hp = Math.max(0, Math.min(data.maxHp, data.hp + (Number(item.hpRestore) || 1)));
-      data.hunger = Math.min(4, Math.max(0, oldHunger + (Number(item.hungerRestore) || (item.campBreakfast ? 3 : 0))));
+      data.hunger = Math.min(4, Math.max(0, oldHunger + (Number(item.hungerRestore) || (isBreakfast ? 3 : 0))));
     }
     saveData(ctx, data);
     if (effect) {
