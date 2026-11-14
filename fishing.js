@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.3.1
+// @version      3.3.2
 // @description  80种鱼类、稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.1');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.3.2');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -174,6 +174,13 @@
         if(!selected)throw Error('请先注册营地角色。');
         const key = groupId + ':' + userId + ':' + String(selected.id).padStart(3,'0');
 
+        // 旧存档迁移在初始化新档案之前进行。
+        const legacyKey=groupId+':'+userId;
+        if(!data.players[key] && data.players[legacyKey] && !data.players[legacyKey].h11MigratedTo){
+            data.players[key]=JSON.parse(JSON.stringify(data.players[legacyKey]));
+            data.players[legacyKey].h11MigratedTo=key;
+            data.players[key].h11LegacyImportPending=true;
+        }
         if (!data.players[key]) {
             data.players[key] = {
                 id: userId,
@@ -187,7 +194,7 @@
         }
 
         const p = data.players[key];
-        p.name = name || p.name;
+        p.name = selected.name || name || p.name;
         if (!p.bag) p.bag = {};
         if (typeof p.rareCount !== 'number') {
             p.rareCount = 0;
@@ -286,7 +293,14 @@
             data.items.fish[fishName] = item;
         }
 
-        // 仅将本次鱼获写入当前角色；历史鱼获保留在旧钓鱼图鉴，避免跨角色重复迁移。
+        // 旧图鉴迁移只在首次归属角色时进行；避免反复导入。
+        if(player.h11LegacyImportPending){
+            for(const oldFish of Object.values(player.bag||{})){
+                if(!data.items.fish[oldFish.name])addOneFish(oldFish.name,oldFish.count,(oldFish.location||'未知水域')+' · '+(oldFish.rarity||'鱼类'));
+            }
+            player.h11LegacyImportPending=false;
+        }
+        // 本次钓获写入当前角色。
         addOneFish(caughtFish.name,1,caughtFish.location+' · '+RARITY[caughtFish.rarity].name);
         data.version = 2;
         store[role]=data;
