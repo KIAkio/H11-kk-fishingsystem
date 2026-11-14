@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.7.3';
+  const VERSION = '1.7.4';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -386,7 +386,7 @@
     '【钓鱼】',
     '.钓鱼 — 开始钓鱼',
     '.查看钓鱼信息 — 查看个人钓鱼数据',
-    '.查看背包 — 查看钓鱼模块记录的鱼类',
+    '.鱼篓 — 查看当前角色的钓鱼图鉴',
     '.钓鱼排行 — 查看钓鱼排行',
     '【查询帮助】',
     '.指令H11 / 。指令H11 / ，指令H11 — 查看本表',
