@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.5.7
+// @version      1.5.8
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.5.7';
+  const VERSION = '1.5.8';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -498,7 +498,7 @@
     saveData(ctx, data);
     const hearts = '❤️'.repeat(Math.min(data.hp, 20)) +
       '🖤'.repeat(Math.min(Math.max(0, data.maxHp - data.hp), 20));
-    reply(ctx, msg, '【冒险者状态】\n' + hearts +
+    reply(ctx, msg, '【' + getRegisteredName(ctx) + '的状态】\n' + hearts +
       '\n生命值：' + data.hp + ' / ' + data.maxHp +
       (Number(data.hunger) === 0 ? '\n【饥饿】' : '') +
       '\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4');
