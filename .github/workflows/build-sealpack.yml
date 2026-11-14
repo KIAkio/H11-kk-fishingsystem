@@ -100,6 +100,7 @@ jobs:
           echo "Building H11 all-in-one package version $VERSION"
           echo "ALL_VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      # Repack H11 all-in-one v1.0.2 after food sharing fix.
       - name: Validate and pack H11 all-in-one
         run: |
           for file in h11-all-in-one/scripts/*.js; do node --check "$file"; done
