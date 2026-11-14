@@ -1,22 +1,25 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.0.5
+// @version 1.1.0
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.0.5',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.0',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。']];
 function raw(c,k){const r=seal.vars.strGet(c,k);return Array.isArray(r)?r[0]||'':''}
-function read(c,k,d){const s=raw(c,k);if(!s)return d;try{return JSON.parse(s)}catch(e){throw Error('存档损坏，已停止操作以保护数据。')}}
-function write(c,k,v){seal.vars.strSet(c,k,JSON.stringify(v))}
 function uid(c){return String(c.player&&(c.player.userId||c.player.id)||'')}
-function prof(c){const p=read(c,PROFILE,{members:{}});return p.members&&p.members[uid(c)]}
-function ok(c){const p=prof(c);return !!(p&&(typeof p==='string'||p.id||p.name))}
+function profile(c){const rawp=raw(c,PROFILE);if(!rawp)return {members:{},active:{}};try{return JSON.parse(rawp)}catch(e){throw Error('档案损坏，停止操作')}}
+function prof(c){const p=profile(c),list=p.members&&p.members[uid(c)],arr=Array.isArray(list)?list:list?[list]:[];return arr.find(x=>x.id===(p.active||{})[uid(c)])||arr[0]||null}
+function ok(c){return !!prof(c)}
 function pname(c){const p=prof(c);return p&&p.name||c.player&&c.player.name||uid(c)}
+function role(c){const p=prof(c);if(!p)throw Error('请先注册营地角色');return String(c.group&&(c.group.groupId||c.group.id)||'private')+'::'+String(p.id).padStart(3,'0')}
+function read(c,k,d){if(k===BAG||k===ATT){const r=raw(c,k===BAG?'$mH11角色数据仓库':'$mH11角色点名仓库');let store={};if(r){try{store=JSON.parse(r)}catch(e){throw Error('角色存档损坏，停止操作')}}return store[role(c)]||d}
+ const s=raw(c,k);if(!s)return d;try{return JSON.parse(s)}catch(e){throw Error('存档损坏，已停止操作以保护数据。')}}
+function write(c,k,v){if(k===BAG||k===ATT){const key=k===BAG?'$mH11角色数据仓库':'$mH11角色点名仓库',r=raw(c,key);let store={};if(r){try{store=JSON.parse(r)}catch(e){throw Error('角色存档损坏，停止写入')}}store[role(c)]=v;seal.vars.strSet(c,key,JSON.stringify(store));return}seal.vars.strSet(c,k,JSON.stringify(v))}
 function reply(c,m,t){seal.replyToSender(c,m,t)}
 function cmd(n,h,fn){const x=seal.ext.newCmdItemInfo();x.name=n;x.help=h;x.solve=(c,m,a)=>{try{fn(c,m,a)}catch(e){console.log('[冬训营生活] '+e);reply(c,m,'冬训营生活系统：'+(e.message||e))}return seal.ext.newCmdExecuteResult(true)};ext.cmdMap[n]=x}
 // 固定 UTC+8：北京时间无夏令时；避免 SealDice JS 沙箱缺少 Intl。
@@ -48,7 +51,7 @@ if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}
 const now=new Date();if(hour(now)>=12){reply(c,m,'呵呵..现在可不是打卡的时候...');return}
 const r=read(c,ATT,{lastDate:'',count:0}),today=day(now);if(r.lastDate===today){reply(c,m,'今日已打卡。早上好'+pname(c)+'同学=∨=\n🎫累计数：'+r.count);return}
 r.lastDate=today;r.count=(+r.count||0)+1;write(c,ATT,r);
-const rank=read(c,RANK,{members:{}});rank.members[uid(c)]={name:pname(c),count:r.count};write(c,RANK,rank);
+const rank=read(c,RANK,{members:{}});rank.members[uid(c)+'::'+role(c)]={name:pname(c),count:r.count};write(c,RANK,rank);
 const d=sync(c),a=MENU[Math.floor(Math.random()*MENU.length)],twice=Math.random()<.1,b=twice?MENU[Math.floor(Math.random()*MENU.length)]:null;
 function add(x){const n='营地早餐：'+x[0],v=d.items.other[n]||{count:0};v.count=(+v.count||0)+1;v.description=x[1];v.campBreakfast=true;v.hungerRestore=3;v.hpRestore=1;v.expiresAt=nextEight();d.items.other[n]=v}
 add(a);if(b)add(b);save(c,d);
