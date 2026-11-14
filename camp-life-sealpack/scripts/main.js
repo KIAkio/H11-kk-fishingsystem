@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.8
+// @version 1.1.9
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.8',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.9',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。']];
@@ -54,7 +54,7 @@ const character=prof(c),title=character&&character.role==='教官'?'教官':char
 const student=pname(c)+title;
 const repeatHeader='今日已打卡。\n'+pname(c)+' '+String(character.id).padStart(3,'0')+'\n🎫累计数：';
 let greeting;
-if(seconds<2*3600)greeting='还有'+student+'这么勤奋啊！';
+if(seconds<2*3600)greeting='还有'+pname(c)+'这么勤奋的'+title+'啊！';
 else if(seconds<5*3600)greeting='夜深人静……🌌，只有鼾声和'+student+'打卡的声音。';
 else if(seconds<6*3600+60)greeting=pname(c)+'见到了布里吉五点钟的太阳🌅，等等…太阳呢？';
 else if(seconds<11*3600)greeting='早上好'+student+'=∨=';
