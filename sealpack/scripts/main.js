@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.5.6
+// @version      1.5.7
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.5.6';
+  const VERSION = '1.5.7';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -498,10 +498,10 @@
     saveData(ctx, data);
     const hearts = '❤️'.repeat(Math.min(data.hp, 20)) +
       '🖤'.repeat(Math.min(Math.max(0, data.maxHp - data.hp), 20));
-    reply(ctx, msg, '【冒险者状态】\\n' + hearts +
-      '\\n生命值：' + data.hp + ' / ' + data.maxHp +
-      (Number(data.hunger) === 0 ? '\\n【饥饿】' : '') +
-      '\\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4');
+    reply(ctx, msg, '【冒险者状态】\n' + hearts +
+      '\n生命值：' + data.hp + ' / ' + data.maxHp +
+      (Number(data.hunger) === 0 ? '\n【饥饿】' : '') +
+      '\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4');
   });
 
   registerCommand('食用', '食用背包中的食物：.食用 食物名称（营地早餐可省略前缀）', (ctx, msg, args) => {
@@ -548,11 +548,11 @@
     }
     saveData(ctx, data);
     if (effect) {
-      reply(ctx, msg, '☠️ 你食用了「' + foundName + '」。\\n' + effect.description +
-        '\\nHP：' + oldHp + ' → ' + data.hp + ' / ' + data.maxHp);
+      reply(ctx, msg, '☠️ 你食用了「' + foundName + '」。\n' + effect.description +
+        '\nHP：' + oldHp + ' → ' + data.hp + ' / ' + data.maxHp);
     } else {
-      reply(ctx, msg, '🍽️ 你食用了「' + foundName + '」。\\n❤️ HP：' + oldHp +
-        ' → ' + data.hp + ' / ' + data.maxHp + '\\n饱腹值：' + oldHunger +
+      reply(ctx, msg, '🍽️ 你食用了「' + foundName + '」。\n❤️ HP：' + oldHp +
+        ' → ' + data.hp + ' / ' + data.maxHp + '\n饱腹值：' + oldHunger +
         ' → ' + data.hunger + ' / 4');
     }
   });
