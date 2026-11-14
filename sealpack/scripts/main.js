@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.2
+// @version      1.8.3
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.2';
+  const VERSION = '1.8.3';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -154,7 +154,12 @@
       for (const hour of [5, 10, 15, 20]) {
         const timestamp = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), hour - 8);
         if (timestamp > start && timestamp <= now) {
-          data.hunger = hour === 5 ? 1 : Math.max(0, Number(data.hunger) - 1);
+          if (Number(data.hunger) <= 0) {
+            data.hunger = 0;
+            data.hp = Math.max(0, Number(data.hp) - 1);
+          } else {
+            data.hunger = hour === 5 ? 1 : Math.max(0, Number(data.hunger) - 1);
+          }
         }
       }
     }
@@ -591,14 +596,14 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【发放 v1.8.2】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放 v1.8.3】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const queue=jsonRead(ctx,'$gH11待发放物品',{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(ctx,'$gH11待发放物品',queue);
-    reply(ctx,msg,'🎁【发放 v1.8.2】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    reply(ctx,msg,'🎁【发放 v1.8.3】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
   registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
