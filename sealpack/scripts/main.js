@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.6.1';
+  const VERSION = '1.7.0';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -188,7 +188,7 @@
     for (const uid of Object.keys(p.members)) {
       const old = p.members[uid];
       const list = Array.isArray(old) ? old : old ? [old] : [];
-      p.members[uid] = list.map(x => typeof x === 'string' ? {id:x,name:''} : x).filter(x=>x && x.id != null).map(x=>({id:String(x.id).padStart(3,'0'),name:String(x.name||'')}));
+      p.members[uid] = list.map(x => typeof x === 'string' ? {id:x,name:''} : x).filter(x=>x && x.id != null).map(x=>({id:String(x.id).padStart(3,'0'),name:String(x.name||''),role:['学员','教官','教师'].includes(x.role)?x.role:'学员'}));
       for (const x of p.members[uid]) { const n=Number(x.id); if(Number.isInteger(n))highest=Math.max(highest,n); }
       if (!p.active[uid] && p.members[uid].length) p.active[uid] = p.members[uid][0].id;
     }
@@ -238,12 +238,12 @@
     const created=!role;
     const duplicate=created && Object.keys(p.members).some(u=>u!==uid && p.members[u].some(x=>x.name===name));
     if(!role){
-      role={id:String(p.nextId++).padStart(3,'0'),name};
+      role={id:String(p.nextId++).padStart(3,'0'),name,role:'学员'};
       mine.push(role);p.members[uid]=mine;
     }
     p.active[uid]=role.id;
     saveGroupProfiles(ctx,p);
-    return {id:role.id,name:role.name,created,duplicate};
+    return {id:role.id,name:role.name,role:role.role||'学员',created,duplicate};
   }
   function getRegisteredName(ctx) {
     const r=currentRole(ctx);
@@ -362,6 +362,8 @@
     '.营地名单 — 查看本营地角色',
     '.我的档案 — 查看自己在本营地的角色',
     '.切换 编号 — 切换角色',
+    '.任命 编号 教官/教师 — 管理员任命职务',
+    '.解除任命 编号 — 管理员恢复学员身份',
     '.删除h编号 / .删除 姓名 — 删除角色（需确认）',
     '.背包 [鱼类/蘑菇/浆果/日用品/训练装备/其他] — 查看背包',
     '.状态 — 查看 HP 与饱腹值',
@@ -419,24 +421,42 @@
     const lines = [
       '📋【' + profile.name + '的档案】',
       'ID：' + profile.id,
+      '职务：' + profile.role,
       '❤️ HP：' + data.hp + ' / ' + data.maxHp,
       '⭐ 等级：1',
       '✨ 经验：0',
       '🎒 背包：' + (totalCount || '空')
     ];
-    reply(ctx, msg, (profile.created ? (profile.duplicate ? '当前营地存在同名角色：'+profile.name+'\n为您新建档案：'+profile.name+'，'+profile.id+'，请牢记自己的编号。' : '已为您新建角色档案：'+profile.name+'，'+profile.id) : '当前账号已存在角色：'+profile.name+'（'+profile.id+'），已沿用原档案。')+'\n'+lines.join('\n')+'\n❄️'+profile.name+'同学，欢迎来到圣布里吉冬训营❄️');
+    reply(ctx, msg, (profile.created ? (profile.duplicate ? '当前营地存在同名角色：'+profile.name+'\n为您新建档案：'+profile.name+'，'+profile.id+'，请牢记自己的编号。' : '已为您新建角色档案：'+profile.name+'，'+profile.id) : '当前账号已存在角色：'+profile.name+'（'+profile.id+'），已沿用原档案。')+'\n'+lines.join('\n')+'\n❄️'+profile.name+(profile.role==='学员'?'同学':profile.role==='教师'?'老师':'教官')+'，欢迎来到圣布里吉冬训营❄️');
   });
 
   registerCommand('营地名单','查看当前营地全部角色',(ctx,msg)=>{
     const p=loadGroupProfiles(ctx),rows=[];
-    for(const [uid,list] of Object.entries(p.members))for(const r of list)rows.push(r.id+'｜'+r.name+'｜'+uid);
+    for(const [uid,list] of Object.entries(p.members))for(const r of list)rows.push(r.id+'｜'+r.name+'｜'+(r.role||'学员')+'｜'+uid);
     rows.sort((a,b)=>Number(a.slice(0,3))-Number(b.slice(0,3)));
     reply(ctx,msg,'🏕️【营地名单】\n'+(rows.length?rows.join('\n'):'暂无注册角色'));
   });
   registerCommand('我的档案','查看本营地自己的角色',(ctx,msg)=>{
     const p=loadGroupProfiles(ctx),uid=getPlayerId(ctx),list=p.members[uid]||[];
-    reply(ctx,msg,'📋【我的营地档案】\n'+(list.length?list.map(x=>x.id+'｜'+x.name+(p.active[uid]===x.id?'（当前）':'')).join('\n'):'尚未注册'));
+    reply(ctx,msg,'📋【我的营地档案】\n'+(list.length?list.map(x=>x.id+'｜'+x.name+'｜'+(x.role||'学员')+(p.active[uid]===x.id?'（当前）':'')).join('\n'):'尚未注册'));
   });
+  function changeCampRole(ctx,msg,args,reset){
+    if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'仅群管理员、群主或骰主可以任命或解除职务。');return;}
+    const raw=String(args.getArgN(1)||'').trim();
+    if(!/^\\d+$/.test(raw)){reply(ctx,msg,'请提供纯数字档案编号，例如：.任命 002 教官');return;}
+    const id=raw.padStart(3,'0'),role=reset?'学员':String(args.getArgN(2)||'').trim();
+    if(!['学员','教官','教师'].includes(role)||(role==='学员'&&!reset)){
+      reply(ctx,msg,'可任命的职务为：教官、教师。恢复学员请使用 .解除任命 编号');return;
+    }
+    const p=loadGroupProfiles(ctx),matches=[];
+    for(const [uid,list] of Object.entries(p.members))for(const r of list)if(r.id===id)matches.push({uid,r});
+    if(matches.length!==1){reply(ctx,msg,'未找到唯一的档案编号：'+id);return;}
+    const target=matches[0].r,old=target.role||'学员';
+    target.role=role;saveGroupProfiles(ctx,p);
+    reply(ctx,msg,(reset?'已解除职务':'任命成功')+'：'+target.name+'（'+id+'）\\n'+old+' → '+role+'\\n角色编号、背包及属性保持不变。');
+  }
+  registerCommand('任命','管理员任命：.任命 002 教官/教师',(ctx,msg,args)=>changeCampRole(ctx,msg,args,false));
+  registerCommand('解除任命','管理员解除任命：.解除任命 002',(ctx,msg,args)=>changeCampRole(ctx,msg,args,true));
   registerCommand('切换','切换角色：.切换 001',(ctx,msg,args)=>{
     const id=String(args.getArgN(1)||'').trim().replace(/^h/i,'').padStart(3,'0');
     const r=selectRole(ctx,id);
