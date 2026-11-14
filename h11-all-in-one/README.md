@@ -1,0 +1,17 @@
+# H11 冬训营整合包
+
+一次安装四个模块：角色档案与背包核心、钓鱼、蘑菇与浆果采集、营地生活与每日点名。
+
+- 包版本：1.0.0
+- 核心：1.7.5
+- 钓鱼：3.4.4
+- 采集：1.1.1
+- 生活：1.1.1
+
+## 安装与更新
+
+通过海豹核心的 Sealpack URL 安装：`https://github.com/KIAkio/H11-kk-fishingsystem/releases/latest/download/h11-all-in-one.sealpack` **不推荐**：该仓库还发布其他模块，latest 可能指向其他 release。
+
+请使用稳定的整合包发行地址：`https://github.com/KIAkio/H11-kk-fishingsystem/releases/download/h11-all-v1.0.0/h11-all-in-one.sealpack`。
+
+整合包和独立包使用相同扩展 ID、存档变量；**启用整合包前先禁用或卸载四个独立扩展**，避免重复注册。以后修改源模块时，需要同步更新本目录对应脚本并提高整合包版本，才会进入整合包。
