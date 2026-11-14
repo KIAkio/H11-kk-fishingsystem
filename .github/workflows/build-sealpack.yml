@@ -84,37 +84,3 @@ jobs:
           files: |
             dist/h11-fishing-${{ env.FISHING_VERSION }}.sealpack
             dist/h11-fishing.sealpack
-
-  all-in-one:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Read all-in-one version
-        shell: bash
-        run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' h11-all-in-one/info.toml | head -n 1)"
-          test -n "$VERSION"
-          test "$(sed -n 's/^format_version = "\(.*\)"$/\1/p' h11-all-in-one/info.toml | head -n 1)" = "1.0.0"
-          echo "Building H11 all-in-one package version $VERSION"
-          echo "ALL_VERSION=$VERSION" >> "$GITHUB_ENV"
-
-      # Repack H11 all-in-one v1.0.2 after food sharing fix.
-      - name: Validate and pack H11 all-in-one
-        run: |
-          for file in h11-all-in-one/scripts/*.js; do node --check "$file"; done
-          npx --yes sealpack@0.1.2 validate h11-all-in-one
-          mkdir -p dist
-          npx --yes sealpack@0.1.2 pack h11-all-in-one --out "dist/h11-all-in-one-$ALL_VERSION.sealpack"
-          cp "dist/h11-all-in-one-$ALL_VERSION.sealpack" dist/h11-all-in-one.sealpack
-
-      - name: Publish all-in-one GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: h11-all-current
-          name: H11 冬训营整合包 v${{ env.ALL_VERSION }}
-          generate_release_notes: true
-          files: |
-            dist/h11-all-in-one-${{ env.ALL_VERSION }}.sealpack
-            dist/h11-all-in-one.sealpack
