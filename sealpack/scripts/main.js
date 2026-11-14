@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.7.1';
+  const VERSION = '1.7.2';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -364,8 +364,8 @@
     '.切换 编号 — 切换角色',
     '.任命 编号 教官/教师 — 管理员任命职务',
     '.解除任命 编号 — 管理员恢复学员身份',
-    '.删除 编号/姓名 — 删除角色（需确认）',
-    '.确认删除 编号 — 确认删除',
+    '.删除000 / .删除 000 / .删除 姓名 — 删除角色（需确认）',
+    '.确认删除000 / .确认删除 000 — 确认删除',
     '.背包 [鱼类/蘑菇/浆果/日用品/训练装备/其他] — 查看背包',
     '.状态 — 查看 HP 与饱腹值',
     '.食用 食物名 — 食用背包物品',
@@ -463,21 +463,21 @@
       if(!target||!target.player||!target.player.userId){reply(ctx,msg,'无法识别目标玩家。');return;}
       owner=String(target.player.userId);
     }
-    const normalized=/^\\d+$/.test(selector)?selector.padStart(3,'0'):selector;
+    const normalized=/^\d+$/.test(selector)?selector.padStart(3,'0'):selector;
     const matches=(p.members[owner]||[]).filter(r=>r.id===normalized || r.name===selector);
     if(matches.length!==1){reply(ctx,msg,matches.length?'存在同名角色，请使用编号删除。':'未找到符合条件的角色。');return;}
     const r=matches[0],key=groupKey(ctx)+'::'+self;
     pendingDeletes[key]={owner,id:r.id,expires:Date.now()+120000};
-    reply(ctx,msg,'⚠️ 将删除「'+r.name+'」（'+r.id+'）。请在两分钟内发送：.确认删除 '+r.id);
+    reply(ctx,msg,'⚠️ 将删除「'+r.name+'」（'+r.id+'）。请在两分钟内发送：.确认删除'+r.id);
   }
-  registerCommand('删除','删除角色：.删除 001 或 .删除 埃莱',(ctx,msg,args)=>{
-    const selector=String(args.getArgN(1)||'').trim();
-    if(!selector){reply(ctx,msg,'格式：.删除 编号 或 .删除 角色名');return;}
-    deleteRequest(ctx,msg,selector,args);
-  });
-  registerCommand('确认删除','确认删除：.确认删除 001',(ctx,msg,args)=>{
-    const raw=String(args.getArgN(1)||'').trim();
-    if(!/^\\d+$/.test(raw)){reply(ctx,msg,'格式：.确认删除 编号');return;}
+  function compactDeleteArg(msg,verb){
+    const text=String(msg&&msg.message||'').trim();
+    const prefix='^[.。，]'+verb+'\\s*';
+    const m=text.match(new RegExp(prefix+'([^\\s]+)\\s*$'));
+    return m?m[1]:'';
+  }
+  function confirmDelete(ctx,msg,raw){
+    if(!/^\\d+$/.test(raw)){reply(ctx,msg,'格式：.确认删除000 或 .确认删除 000');return;}
     const id=raw.padStart(3,'0'),key=groupKey(ctx)+'::'+getPlayerId(ctx),pending=pendingDeletes[key];
     if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有待确认的删除请求，或已过期。');return;}
     const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
@@ -485,6 +485,15 @@
     if(pending.owner!==getPlayerId(ctx)&&Number(ctx.privilegeLevel)<50){reply(ctx,msg,'权限不足。');return;}
     deleteRole(ctx,pending.owner,r);delete pendingDeletes[key];
     reply(ctx,msg,'已删除角色：'+r.name+'（'+r.id+'）。');
+  }
+  registerCommand('删除','删除角色：.删除000 或 .删除 000',(ctx,msg,args)=>{
+    const selector=String(args.getArgN(1)||'').trim()||compactDeleteArg(msg,'删除');
+    if(!selector){reply(ctx,msg,'格式：.删除000 或 .删除 角色名');return;}
+    deleteRequest(ctx,msg,selector,args);
+  });
+  registerCommand('确认删除','确认删除：.确认删除000 或 .确认删除 000',(ctx,msg,args)=>{
+    const raw=String(args.getArgN(1)||'').trim()||compactDeleteArg(msg,'确认删除');
+    confirmDelete(ctx,msg,raw);
   });
   registerCommand('背包', '查看背包：.背包 / .背包 鱼类、蘑菇、浆果、日用品、训练装备、其他', (ctx, msg, args) => {
     const data = loadData(ctx);
