@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.1.0
+// @version 0.2.0
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -9,7 +9,11 @@
 
   const EXT = 'winter_camp_battle';
   const DATA = 'battle:v1';
-  const DEFAULT_STATS = { speed: 10, agility: 3, insight: 3, attack: 4, defense: 2, armor: 3, calls: 1, cooldown: 1 };
+  const DEFAULT_STATS = { speed: 50, agility: 50, insight: 50, attack: 55, defense: 30 };
+  const FIELDS = Object.keys(DEFAULT_STATS);
+  const LABELS = ['速度', '灵敏', '洞察', '攻击', '防御'];
+  const ARMOR_CAP = 8;
+  const INPUT = '。录入 速度60，灵敏65，洞察50，攻击70，防御40';
   const ACTIONS = { attack: '攻击', block: '格挡', dodge: '闪避' };
   const HELP = [
     '❄️【圣布里吉 · 战斗指令】',
@@ -18,12 +22,18 @@
     '遇袭：。战斗 格挡 或 。战斗 闪避，尾加「求助」可等待喊话',
     '队友：。战斗 喊话 行动码；无人喊话时由当事人或带队发 。战斗 结算 行动码',
     '其他：。战斗 状态 / 跳过 / 治疗 角色编号；带队可发 。战斗 收队',
+    INPUT + '（在小窗可录入当前角色）',
+    '查看属性：。战斗 档案 ｜ 装备：。战斗 穿戴 装备名 / 脱下 装备名',
     '独立指令：。投掷 物品名（灵敏检定，成功造成 2 点伤害）',
     '长指令都以「。战斗 」开头；加入、开队和开始须在队群发送。'
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.1.0');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.0');
+
+  function hasOwn(object, key) {
+    return Object.prototype.hasOwnProperty.call(object, key);
+  }
 
   function check(condition, message) {
     if (!condition) throw new Error(message);
@@ -31,9 +41,26 @@
 
   function load() {
     const raw = ext.storageGet(DATA);
-    if (!raw) return { rooms: {}, nextAction: 1 };
-    const data = JSON.parse(raw);
+    const data = raw ? JSON.parse(raw) : { rooms: {}, nextAction: 1 };
     check(data && data.rooms && Number.isSafeInteger(data.nextAction), '战斗存档无法读取。');
+    if (!data.characters) data.characters = {};
+    if (!data.armorCatalog) data.armorCatalog = {};
+    for (const room of Object.values(data.rooms)) {
+      if (room.rules === 2) continue;
+      for (const player of room.players) {
+        for (const field of FIELDS) player.stats[field] = Math.min(100, (player.stats[field] || 0) * 10);
+        player.armor = Math.min(ARMOR_CAP, player.armor);
+        player.maxArmor = player.armor;
+      }
+      if (room.enemy) {
+        room.enemy.speed = Math.min(100, room.enemy.speed * 10);
+        room.enemy.attack = Math.min(100, room.enemy.attack * 10);
+        room.enemy.defense = Math.min(100, room.enemy.defense * 10);
+        room.enemy.armor = Math.min(ARMOR_CAP, room.enemy.armor);
+        room.enemy.maxArmor = room.enemy.armor;
+      }
+      room.rules = 2;
+    }
     return data;
   }
 
@@ -60,45 +87,141 @@
     return parsed;
   }
 
-  function makePlayer(ctx, characterId) {
+  function character(ctx, characterId) {
     const profiles = globalThis.H11CampProfiles;
     check(profiles, '请先启用地精背包核心 1.8.5 或更新版本。');
     const id = uid(ctx);
     const registry = profiles.read(ctx);
-    const entries = registry.members[id] || [];
     if (characterId) check(/^\d+$/.test(characterId), '角色编号须为数字。');
     const wanted = characterId ? characterId.padStart(3, '0') : registry.active[id];
-    const profile = entries.find(entry => entry.id === wanted);
+    const profile = (registry.members[id] || []).find(entry => entry.id === wanted);
     check(profile, '未找到你名下的该营地角色。请先注册或核对编号。');
+    const roleKey = profiles.groupKey(ctx) + '::' + profile.id;
     const result = seal.vars.strGet(ctx, '$mH11角色数据仓库');
     const store = result[0] ? JSON.parse(result[0]) : {};
-    const bag = store[profiles.groupKey(ctx) + '::' + profile.id] || {};
+    return { profile, key: id + '::' + roleKey, bag: store[roleKey] || {} };
+  }
+
+  function record(data, identity) {
+    if (!data.characters[identity.key]) {
+      data.characters[identity.key] = { stats: Object.assign({}, DEFAULT_STATS), gear: [] };
+    }
+    return data.characters[identity.key];
+  }
+
+  function armorCapacity(data, identity, saved) {
+    const equipment = identity.bag.items && identity.bag.items.equipment || {};
+    return Math.min(ARMOR_CAP, saved.gear.reduce((sum, name) =>
+      sum + (hasOwn(equipment, name) && equipment[name].count > 0 && hasOwn(data.armorCatalog, name)
+        ? data.armorCatalog[name] : 0), 0));
+  }
+
+  function statsText(stats) {
+    return FIELDS.map((field, index) => LABELS[index] + stats[field]).join('，');
+  }
+
+  function parseStats(text) {
+    const stats = {};
+    for (const part of text.split(/[，,]/)) {
+      const match = /^\s*(速度|灵敏|洞察|攻击|防御)\s*(\d{1,3})\s*[%％]?\s*$/.exec(part);
+      check(match, '格式示例：' + INPUT);
+      const field = FIELDS[LABELS.indexOf(match[1])];
+      check(!hasOwn(stats, field), '「' + match[1] + '」重复录入。');
+      stats[field] = number(match[2], 0, 100);
+    }
+    check(Object.keys(stats).length === FIELDS.length, '请一次填写五项属性。' + INPUT);
+    return stats;
+  }
+
+  function editCharacter(data, ctx, cmd, words) {
+    if (cmd === '护甲装备') {
+      check(ctx.privilegeLevel >= 100, '请由骰主登记装备护甲。');
+      const value = number(words.shift(), 0, ARMOR_CAP);
+      const name = words.join(' ').trim();
+      check(name && !['__proto__', 'constructor', 'prototype'].includes(name), '格式：。战斗 护甲装备 3 防寒背心');
+      data.armorCatalog[name] = value;
+      return { data, text: name + ' 的护甲值已登记为 ' + value + '。' };
+    }
+
+    const identity = character(ctx);
+    const saved = record(data, identity);
+    if (cmd === '录入') saved.stats = parseStats(words.join(' '));
+    if (cmd === '穿戴' || cmd === '脱下') {
+      const name = words.join(' ').trim();
+      const equipment = identity.bag.items && identity.bag.items.equipment || {};
+      if (cmd === '穿戴') {
+        check(hasOwn(data.armorCatalog, name) && data.armorCatalog[name] > 0, '这件装备尚未登记护甲值。');
+        check(hasOwn(equipment, name) && equipment[name].count > 0, '当前角色的训练装备中没有这件物品。');
+        check(!saved.gear.includes(name), '这件装备已经穿戴。');
+        saved.gear.push(name);
+      } else {
+        check(saved.gear.includes(name), '当前角色没有穿戴这件装备。');
+        saved.gear = saved.gear.filter(item => item !== name);
+      }
+    }
+
+    const maxHp = identity.bag.maxHp == null ? 10 : identity.bag.maxHp;
+    const hp = identity.bag.hp == null ? maxHp : identity.bag.hp;
+    const maxArmor = armorCapacity(data, identity, saved);
+    return {
+      data: cmd === '档案' ? null : data,
+      text: '📋 ' + identity.profile.name + ' ' + identity.profile.id + '\n' + statsText(saved.stats) +
+        '\n营地 HP ' + hp + '/' + maxHp + ' ｜ 装备护甲上限 ' + maxArmor + '/' + ARMOR_CAP +
+        (saved.gear.length ? '\n穿戴：' + saved.gear.join('、') : '') +
+        (cmd === '档案' ? '' : '\n已保存，将在下一场遭遇生效。')
+    };
+  }
+
+  function makePlayer(data, ctx, characterId) {
+    const identity = character(ctx, characterId);
+    const saved = record(data, identity);
+    const bag = identity.bag;
     const maxHp = Number(bag.maxHp == null ? 10 : bag.maxHp);
     const hp = Number(bag.hp == null ? maxHp : bag.hp);
     check(Number.isSafeInteger(maxHp) && maxHp > 0 && Number.isSafeInteger(hp), '营地角色血量无法读取。');
     check(hp > 0, '该角色当前 HP 为 0，请先在营地恢复。');
+    const maxArmor = armorCapacity(data, identity, saved);
     return {
-      uid: id, id: profile.id, name: profile.name || '营地角色',
-      hp: Math.min(hp, maxHp), maxHp, armor: DEFAULT_STATS.armor,
-      stats: Object.assign({}, DEFAULT_STATS), spentCalls: 0, lastCall: 0, nextCall: 1, healUsed: false
+      uid: uid(ctx), id: identity.profile.id, name: identity.profile.name || '营地角色',
+      hp: Math.min(hp, maxHp), maxHp, armor: maxArmor, maxArmor,
+      stats: Object.assign({}, saved.stats, { calls: 1, cooldown: 1 }),
+      spentCalls: 0, lastCall: 0, nextCall: 1, healUsed: false
     };
   }
 
+  function refreshPlayer(data, ctx, room, player) {
+    const msg = seal.newMessage();
+    msg.messageType = 'group';
+    msg.platform = ctx.endPoint.platform;
+    msg.groupId = room.groupId;
+    msg.sender.userId = player.uid;
+    const target = seal.createTempCtx(ctx.endPoint, msg);
+    check(target && groupId(target) === room.groupId && uid(target) === player.uid, '无法读取队员 ' + player.id + ' 的档案。');
+    const identity = character(target, player.id);
+    const saved = data.characters[identity.key];
+    if (saved) {
+      player.stats = Object.assign({}, saved.stats, { calls: player.stats.calls, cooldown: player.stats.cooldown });
+    }
+    const capacity = armorCapacity(data, identity, saved || { gear: [] });
+    player.armor = Math.max(0, player.armor + capacity - player.maxArmor);
+    player.maxArmor = capacity;
+  }
+
   function encounter(args) {
-    if (!args.length) return { name: '冰狼', hp: 16, armor: 2, speed: 8, attack: 4, defense: 1, dc: 11, maxHp: 16 };
-    check(args.length === 7, '格式：。战斗 开始 怪名 HP 护甲 速度 攻击 防御 命中门槛');
+    if (!args.length) return { name: '冰狼', hp: 16, armor: 2, maxArmor: 2, speed: 40, attack: 55, defense: 20, maxHp: 16 };
+    check(args.length === 6, '格式：。战斗 开始 怪名 HP 护甲 速度 攻击 防御');
     const hp = number(args[1], 1, 999);
+    const armor = number(args[2], 0, ARMOR_CAP);
     return {
-      name: args[0], hp, maxHp: hp, armor: number(args[2], 0, 999),
-      speed: number(args[3], 0, 99), attack: number(args[4], 1, 99),
-      defense: number(args[5], 0, 99), dc: number(args[6], 2, 30)
+      name: args[0], hp, maxHp: hp, armor, maxArmor: armor,
+      speed: number(args[3], 0, 100), attack: number(args[4], 0, 100), defense: number(args[5], 0, 100)
     };
   }
 
   function meters(target) {
     const filled = Math.ceil(6 * target.hp / target.maxHp);
     return 'HP ' + '■'.repeat(filled) + '□'.repeat(6 - filled) + ' ' + target.hp + '/' + target.maxHp +
-      (target.armor > 0 ? ' ｜ 护甲 ' + target.armor : '');
+      (target.armor > 0 ? ' ｜ 护甲 ' + target.armor + '/' + target.maxArmor : '');
   }
 
   function status(room) {
@@ -136,7 +259,7 @@
   }
 
   function roll() {
-    return 1 + Math.floor(Math.random() * 20);
+    return 1 + Math.floor(Math.random() * 100);
   }
 
   function damage(target, amount) {
@@ -175,39 +298,49 @@
     }
   }
 
+  function chance(value) {
+    return Math.max(0, Math.min(100, value));
+  }
+
+  function strikeDamage(attacker, defender, reduction) {
+    const force = 2 + Math.floor(attacker.attack / 20);
+    return Math.max(0, force - Math.floor(defender.defense / 20) - reduction);
+  }
+
   function settle(room, kind, player, helper, selfAnalysis) {
     let bonus = 0;
     const lines = [];
     if (helper || selfAnalysis) {
       const analyst = helper || player;
       const dice = roll();
-      const success = dice + analyst.stats.insight >= 12;
-      bonus = success ? 2 : 0;
+      const success = dice <= analyst.stats.insight;
+      bonus = success ? 10 : 0;
       lines.push(playerName(analyst) + (helper ? ' 向 ' + playerName(player) + ' 喊话' : ' 自行解析破绽') +
-        ' ｜ 洞察 ' + dice + '+' + analyst.stats.insight + '/12 ' + (success ? '成功，+2' : '失败'));
+        ' ｜ 洞察 ' + dice + '/' + analyst.stats.insight + ' ' + (success ? '成功' : '失败'));
     }
 
     const enemy = room.enemy;
-    const dice = roll();
     const stats = player.stats;
     if (kind === 'attack') {
-      const hit = dice + bonus >= enemy.dc;
-      lines.push(playerName(player) + ' 攻击 ' + enemy.name + ' ｜ 命中 ' + dice + '+' + bonus + '/' + enemy.dc + ' ｜ ' +
-        (hit ? damage(enemy, Math.max(1, stats.attack - enemy.defense)) : '未命中'));
+      const dice = roll();
+      const threshold = chance(stats.attack + bonus);
+      lines.push(playerName(player) + ' 攻击 ' + enemy.name + ' ｜ 命中 ' + dice + '/' + threshold + ' ｜ ' +
+        (dice <= threshold ? damage(enemy, strikeDamage(stats, enemy, 0)) : '未命中'));
     } else {
-      let threshold = 10;
-      let reduction = stats.defense;
+      let threshold = enemy.attack;
+      let reduction = 0;
       let detail = '';
-      if (kind === 'block') reduction += 2 + bonus;
+      if (kind === 'block') reduction = 2 + (bonus ? 1 : 0);
       else {
         const agility = roll();
-        const success = agility + stats.agility >= 12;
-        threshold += (success ? 4 : 0) + bonus;
-        detail = ' ｜ 灵敏 ' + agility + '+' + stats.agility + '/12 ' + (success ? '成功' : '失败');
+        const success = agility <= chance(stats.agility + bonus);
+        if (success) threshold = chance(threshold - 20);
+        detail = ' ｜ 灵敏 ' + agility + '/' + chance(stats.agility + bonus) + ' ' + (success ? '成功' : '失败');
       }
+      const dice = roll();
       lines.push(playerName(player) + ' ' + ACTIONS[kind] + detail + ' ｜ ' + enemy.name +
         ' 命中 ' + dice + '/' + threshold + ' ｜ ' +
-        (dice >= threshold ? damage(player, Math.max(0, enemy.attack - reduction)) : '未命中'));
+        (dice <= threshold ? damage(player, strikeDamage(enemy, stats, reduction)) : '未命中'));
     }
     advance(room, true);
     return lines.join('\n');
@@ -238,7 +371,7 @@
     advance(room, false);
   }
 
-  const management = ['属性', '开始', '收队', '移除'];
+  const management = ['喊话设置', '开始', '收队', '移除'];
   const actions = ['攻击', '解析', '直接', '自析', '求助', '格挡', '闪避', '喊话', '结算', '跳过', '投掷'];
 
   function run(ctx, msg, words) {
@@ -252,6 +385,9 @@
 
     if (cmd === '帮助') return { text: HELP };
     const data = load();
+    if (['录入', '档案', '护甲装备', '穿戴', '脱下'].includes(cmd)) {
+      return editCharacter(data, ctx, cmd, words);
+    }
     const prefix = endpoint.userId + '|';
     const key = prefix + group;
     const joined = Object.keys(data.rooms).find(roomKey => roomKey.startsWith(prefix) &&
@@ -260,7 +396,7 @@
     if (cmd === '开队') {
       check(inGroup && ctx.privilegeLevel >= 50, '请由队群管理员、群主或骰主开队。');
       check(!room, '本群已有小队，请先「。战斗 收队」。');
-      room = { groupId: group, host: id, phase: 'lobby', players: [] };
+      room = { groupId: group, host: id, phase: 'lobby', players: [], rules: 2 };
       data.rooms[key] = room;
       return { data, text: status(room) };
     }
@@ -275,7 +411,7 @@
       check(words.length <= 1, '格式：。战斗 加入 [角色编号]');
       check(!joined, joined === key ? '你已在本队。' : '你已加入另一支小队。');
       check(room.players.length < 10, '本队已满 10 人。');
-      const member = makePlayer(ctx, words[0]);
+      const member = makePlayer(data, ctx, words[0]);
       room.players.push(member);
       event = playerName(member) + ' 加入小队。';
     } else if (management.includes(cmd)) {
@@ -291,21 +427,20 @@
         room.players = room.players.filter(entry => entry !== target);
         event = playerName(target) + ' 离开小队。';
       }
-      if (cmd === '属性') {
-        check(room.phase === 'lobby', '只可在集结时调整属性。');
-        check(words.length === 9, '格式：。战斗 属性 编号 速度 灵敏 洞察 攻击 防御 护甲 连续喊话次数 冷却轮数');
+      if (cmd === '喊话设置') {
+        check(room.phase === 'lobby', '只可在集结时调整喊话。');
+        check(words.length === 3, '格式：。战斗 喊话设置 编号 连续喊话次数 冷却轮数');
         const target = room.players.find(entry => entry.id === words[0].padStart(3, '0'));
         check(target, '请填写本队角色编号。');
-        const [speed, agility, insight, attack, defense, armor, calls, cooldown] = words.slice(1).map((value, index) =>
-          number(value, index === 3 || index >= 6 ? 1 : 0, index >= 6 ? 2 : 99));
-        target.stats = { speed, agility, insight, attack, defense, armor, calls, cooldown };
-        target.armor = armor;
-        event = playerName(target) + ' 的战斗属性已更新。';
+        target.stats.calls = number(words[1], 1, 2);
+        target.stats.cooldown = number(words[2], 1, 2);
+        event = playerName(target) + ' 的喊话设置已更新。';
       }
       if (cmd === '开始') {
         check(room.phase === 'lobby' || room.phase === 'rest', '当前阶段无法开始新遭遇。');
         check(room.players.some(entry => entry.hp > 0), '需要至少一位仍可行动的队员。');
         const enemy = encounter(words);
+        for (const member of room.players) refreshPlayer(data, ctx, room, member);
         start(room, enemy);
         event = enemy.name + ' 出现了。';
       }
@@ -369,9 +504,9 @@
             check(item && item.length <= 64 && !/[\[\]\r\n]/.test(item), '格式：。投掷 物品名（最多 64 字）');
             const dice = roll();
             const agility = current.stats.agility;
-            const success = dice + agility >= 12;
+            const success = dice <= agility;
             event = item + '滑稽地从你的手里挣扎着飞了出去\n' + playerName(current) +
-              ' ｜ 灵敏 ' + dice + '+' + agility + '/12 ｜ ' +
+              ' ｜ 灵敏 ' + dice + '/' + agility + ' ｜ ' +
               (success ? '命中 ' + room.enemy.name + '，' + damage(room.enemy, 2) : '投掷失败');
             advance(room, true);
             return { data, room, text: event + '\n' + status(room) };
@@ -420,6 +555,11 @@
     command.help = help;
     command.solve = (ctx, msg, args) => {
       const words = initialWords.slice();
+      if (name === '录入') {
+        const raw = String(msg.message || '').replace(/^\s*[.。，]录入\s*/, '');
+        execute(ctx, msg, words.concat(raw));
+        return seal.ext.newCmdExecuteResult(true);
+      }
       for (let index = 1; index <= 65; index++) {
         const word = args.getArgN(index);
         if (!word) break;
@@ -432,13 +572,14 @@
   }
 
   registerCommand('战斗', HELP, []);
+  registerCommand('录入', INPUT, ['录入']);
   registerCommand('投掷', '。投掷 物品名', ['投掷']);
   ext.onNotCommandReceived = (ctx, msg) => {
     const input = String(msg.message || '').trim();
-    const match = /^[。，]((?:战斗|投掷))(?:\s+(.+))?$/.exec(input);
+    const match = /^[。，]((?:战斗|投掷|录入))(?:\s+(.+))?$/.exec(input);
     if (!match) return;
     const words = match[2] ? match[2].split(/\s+/) : [];
-    if (match[1] === '投掷') words.unshift('投掷');
+    if (match[1] !== '战斗') words.unshift(match[1]);
     execute(ctx, msg, words);
   };
   seal.ext.register(ext);
