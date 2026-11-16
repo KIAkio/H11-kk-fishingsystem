@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.2.1
+// @version 0.2.2
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -21,7 +21,7 @@
     '攻击：。战斗 攻击 → 直接 或 解析；选择解析后可选 自析 或 求助',
     '遇袭：。格挡 或 。闪避，尾加「求助」可等待喊话',
     '队友：。战斗 喊话 行动码；无人喊话时由当事人或带队发 。战斗 结算 行动码',
-    '其他：。战斗 状态 / 。跳过 / 。治疗 角色编号；带队可发 。收队',
+    '其他：。战斗 状态 / 。跳过 / 。治疗 角色名或编号；带队可发 。收队',
     INPUT + '（在小窗可录入当前角色）',
     '查看属性：。战斗 档案 ｜ 装备：。战斗 穿戴 装备名 / 脱下 装备名',
     '独立指令：。投掷 物品名（灵敏检定，成功造成 2 点伤害）',
@@ -29,7 +29,7 @@
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.1');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.2');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -239,7 +239,7 @@
       return mark + name + ' ｜ ' + meters(target);
     });
     let prompt = '';
-    if (room.phase === 'rest') prompt = '可发送「。治疗 编号」，由带队开启下一场。';
+    if (room.phase === 'rest') prompt = '可发送「。治疗 角色名或编号」，由带队开启下一场。';
     if (room.phase === 'battle') {
       if (!room.pending) prompt = '轮到 ' + playerName(activePlayer(room)) + ' ｜ 。战斗 攻击 / 。跳过';
       else {
@@ -450,8 +450,17 @@
       event = playerName(player) + ' 离开小队。';
     } else if (cmd === '治疗') {
       check(room.phase === 'rest' && player && player.hp > 0 && !player.healUsed, '每次整备中，可行动的队员各能治疗一次。');
-      const target = room.players.find(entry => entry.id === String(words[0] || '').padStart(3, '0'));
-      check(target && target.hp < target.maxHp, '请选择一位未满血的队员。');
+      const selector = words.join(' ').trim();
+      check(selector, '格式：。治疗 角色名或编号');
+      // 纯数字优先匹配旧有角色编号，其他输入按完整角色名匹配。
+      const byId = /^\d+$/.test(selector)
+        ? room.players.find(entry => entry.id === selector.padStart(3, '0'))
+        : null;
+      const matches = byId ? [byId] : room.players.filter(entry => entry.name.trim().replace(/\s+/g, ' ') === selector);
+      check(matches.length > 0, '本队没有这个角色，请核对名字或编号。');
+      check(matches.length === 1, '本队有同名角色，请用编号：' + matches.map(playerName).join('、') + '。');
+      const target = matches[0];
+      check(target.hp < target.maxHp, playerName(target) + ' 的 HP 已满。');
       const healed = Math.min(3, target.maxHp - target.hp);
       target.hp += healed;
       player.healUsed = true;
@@ -578,7 +587,7 @@
     格挡: '。格挡 [求助]',
     闪避: '。闪避 [求助]',
     跳过: '。跳过',
-    治疗: '。治疗 角色编号',
+    治疗: '。治疗 角色名或编号',
     收队: '。收队'
   };
   for (const [name, help] of Object.entries(commands)) {
