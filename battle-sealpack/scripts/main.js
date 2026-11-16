@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.2.2
+// @version 0.2.3
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -18,18 +18,19 @@
   const HELP = [
     '❄️【圣布里吉 · 战斗指令】',
     '带队：。战斗 开队 → 队员各发 。战斗 加入 → 。战斗 开始',
-    '攻击：。战斗 攻击 → 直接 或 解析；选择解析后可选 自析 或 求助',
+    '攻击：。攻击 或 。攻击 直击，立即掷骰；。攻击 求助，等待队友喊话',
+    '解析：。战斗 解析 或 。攻击 解析 → 。战斗 自析 或 。战斗 求助',
     '遇袭：。格挡 或 。闪避，尾加「求助」可等待喊话',
-    '队友：。战斗 喊话 行动码；无人喊话时由当事人或带队发 。战斗 结算 行动码',
+    '队友：。喊话 行动码；无人喊话时由当事人或带队发 。结算 行动码',
     '其他：。战斗 状态 / 。跳过 / 。治疗 角色名或编号；带队可发 。收队',
     INPUT + '（在小窗可录入当前角色）',
     '查看属性：。战斗 档案 ｜ 装备：。战斗 穿戴 装备名 / 脱下 装备名',
     '独立指令：。投掷 物品名（灵敏检定，成功造成 2 点伤害）',
-    '长指令都以「。战斗 」开头；加入、开队和开始须在队群发送。'
+    '加入、开队和开始须在队群发送。'
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.2');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.3');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -241,7 +242,7 @@
     let prompt = '';
     if (room.phase === 'rest') prompt = '可发送「。治疗 角色名或编号」，由带队开启下一场。';
     if (room.phase === 'battle') {
-      if (!room.pending) prompt = '轮到 ' + playerName(activePlayer(room)) + ' ｜ 。战斗 攻击 / 。跳过';
+      if (!room.pending) prompt = '轮到 ' + playerName(activePlayer(room)) + ' ｜ 。攻击 / 。跳过';
       else {
         const pending = room.pending;
         if (pending.kind === 'defense') {
@@ -251,7 +252,7 @@
           const target = room.players.find(player => player.uid === pending.target);
           prompt = '📣 ' + playerName(target) + (pending.kind === 'attack' ? ' 攻击 ' + room.enemy.name + '，请求要害解析' :
             ' 选择' + ACTIONS[pending.kind] + '，请求队友喊话') +
-            '\n。战斗 喊话 ' + pending.code + ' ｜ 。战斗 结算 ' + pending.code;
+            '\n。喊话 ' + pending.code + ' ｜ 。结算 ' + pending.code;
         }
       }
     }
@@ -372,9 +373,9 @@
   }
 
   const management = ['喊话设置', '开始', '收队', '移除'];
-  const actions = ['攻击', '解析', '直接', '自析', '求助', '格挡', '闪避', '喊话', '结算', '跳过', '投掷'];
+  const actions = ['攻击', '解析', '自析', '求助', '格挡', '闪避', '喊话', '结算', '跳过', '投掷'];
 
-  function run(ctx, msg, words) {
+  function run(ctx, msg, commandName, words) {
     const cmd = words.shift() || '帮助';
     const inGroup = msg.messageType === 'group';
     const id = uid(ctx);
@@ -384,6 +385,10 @@
       (!inGroup || group.startsWith('QQ-Group:')), '请在 QQ 群或 QQ 小窗使用。');
 
     if (cmd === '帮助') return { text: HELP };
+    if (commandName === '战斗') {
+      if (cmd === '攻击' || cmd === '直接') return { text: '请发送「。攻击」发起攻击。' };
+      if (cmd === '喊话' || cmd === '结算') return { text: '请发送「。' + cmd + ' 行动码」。' };
+    }
     const data = load();
     if (['录入', '档案', '护甲装备', '穿戴', '脱下'].includes(cmd)) {
       return editCharacter(data, ctx, cmd, words);
@@ -520,23 +525,28 @@
             advance(room, true);
             return { data, room, text: event + '\n' + status(room) };
           }
-          check(!words.length, '此行动无需附加参数。');
-          if (cmd === '攻击') return { text: '。战斗 直接 ｜ 。战斗 解析' };
-          if (cmd === '解析') return { text: '。战斗 自析 ｜ 。战斗 求助' };
-          if (cmd === '求助') queueAction(data, room, 'attack', current);
-          else event = settle(room, 'attack', current, null, cmd === '自析');
+          let mode = cmd;
+          if (cmd === '攻击') {
+            mode = words[0];
+            check(!words.length || (words.length === 1 && ['直击', '解析', '求助'].includes(mode)), commands.攻击);
+          } else {
+            check(!words.length, '此行动无需附加参数。');
+          }
+          if (mode === '解析') return { text: '。战斗 自析 ｜ 。战斗 求助' };
+          if (mode === '求助') queueAction(data, room, 'attack', current);
+          else event = settle(room, 'attack', current, null, mode === '自析');
         }
       }
     }
     return { data, room, text: (event ? event + '\n' : '') + status(room) };
   }
 
-  function execute(ctx, msg, words) {
+  function execute(ctx, msg, commandName, words) {
     let result;
     let groupContext;
     let groupMessage;
     try {
-      result = run(ctx, msg, words);
+      result = run(ctx, msg, commandName, words);
       if (msg.messageType === 'private' && result.room) {
         groupMessage = seal.newMessage();
         groupMessage.messageType = 'group';
@@ -566,7 +576,7 @@
       const words = initialWords.slice();
       if (name === '录入') {
         const raw = String(msg.message || '').replace(/^\s*[.。，]录入\s*/, '');
-        execute(ctx, msg, words.concat(raw));
+        execute(ctx, msg, name, words.concat(raw));
         return seal.ext.newCmdExecuteResult(true);
       }
       for (let index = 1; index <= 65; index++) {
@@ -574,7 +584,7 @@
         if (!word) break;
         words.push(String(word));
       }
-      execute(ctx, msg, words);
+      execute(ctx, msg, name, words);
       return seal.ext.newCmdExecuteResult(true);
     };
     ext.cmdMap[name] = command;
@@ -584,6 +594,9 @@
     战斗: HELP,
     录入: INPUT,
     投掷: '。投掷 物品名',
+    攻击: '。攻击 [解析|直击|求助]',
+    喊话: '。喊话 行动码',
+    结算: '。结算 行动码',
     格挡: '。格挡 [求助]',
     闪避: '。闪避 [求助]',
     跳过: '。跳过',
@@ -599,7 +612,7 @@
     if (!match || !hasOwn(commands, match[1])) return;
     const words = match[2] ? match[2].split(/\s+/) : [];
     if (match[1] !== '战斗') words.unshift(match[1]);
-    execute(ctx, msg, words);
+    execute(ctx, msg, match[1], words);
   };
   seal.ext.register(ext);
 })();
