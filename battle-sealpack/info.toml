@@ -1,0 +1,36 @@
+format_version = "1.0.0"
+
+[package]
+id = "kiakio/winter-camp-battle"
+name = "圣布里吉冬训营战斗系统"
+version = "0.1.0"
+authors = ["KIAkio"]
+license = "All Rights Reserved"
+description = "QQ 小队群回合制战斗，支持私聊提交行动"
+keywords = ["sealdice", "winter-camp", "battle"]
+
+[package.seal]
+min_version = "1.6.0"
+
+[dependencies]
+
+[permissions]
+network = false
+file_read = []
+file_write = []
+
+[contents]
+scripts = ["scripts/*.js"]
+decks = []
+reply = []
+helpdoc = []
+templates = []
+
+[store]
+readme = "README.md"
+icon = ""
+banner = ""
+screenshots = []
+category = "game"
+
+[config]

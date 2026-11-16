@@ -1,0 +1,45 @@
+name: Build Winter Camp Battle Sealpack
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'battle-sealpack/**'
+      - '.github/workflows/build-camp-battle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Read package version
+        shell: bash
+        run: |
+          VERSION="$(grep -A 8 '^\[package\]' battle-sealpack/info.toml | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)"
+          test -n "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: JavaScript syntax check
+        run: node --check battle-sealpack/scripts/main.js
+      - name: Validate and pack
+        run: |
+          npx --yes sealpack@0.1.2 validate battle-sealpack
+          mkdir -p dist
+          npx --yes sealpack@0.1.2 pack battle-sealpack --out dist/winter-camp-battle-${VERSION}.sealpack
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: winter-camp-battle-v${{ env.VERSION }}
+          name: 圣布里吉冬训营战斗系统 v${{ env.VERSION }}
+          target_commitish: main
+          make_latest: false
+          generate_release_notes: true
+          files: dist/winter-camp-battle-${{ env.VERSION }}.sealpack
