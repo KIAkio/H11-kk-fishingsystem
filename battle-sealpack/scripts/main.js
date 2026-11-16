@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.2.6
+// @version 0.3.0
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -25,6 +25,7 @@
     '遇袭：。格挡 或 。闪避，尾加「求助」可等待喊话',
     '队友：。喊话 行动码；无人喊话时由当事人或带队发 。结算 行动码',
     '当前战况：。战斗 或 。战斗 状态；完整指令：。战斗 帮助',
+    '探索：队群开队入队后发 。探索；遇到线索可查看、绕开或前进',
     '其他：。跳过 / 。治疗 角色名或编号；带队可发 。收队',
     INPUT + '（在小窗可录入当前角色）',
     '查看属性：。战斗 档案 ｜ 装备：。战斗 穿戴 装备名 / 脱下 装备名',
@@ -33,7 +34,7 @@
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.6');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.3.0');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -211,9 +212,22 @@
     player.maxArmor = capacity;
   }
 
+  function monsterLibrary() {
+    const library = globalThis.H11_MONSTER_LIBRARY;
+    check(library && library.listWinter && library.findWinter, '先安装并启用 H11 怪物库 1.1.0。');
+    return library;
+  }
+
   function encounter(args) {
     if (!args.length) return { name: '冰狼', hp: 16, armor: 2, maxArmor: 2, speed: 40, attack: 55, defense: 20, maxHp: 16 };
-    check(args.length === 6, '格式：。战斗 开始 怪名 HP 护甲 速度 攻击 防御');
+    if (args.length === 1) {
+      const entry = monsterLibrary().findWinter(args[0]);
+      check(entry, '怪物库没有这个名字或编号。');
+      check(entry.role !== '非战斗', entry.name + '是非战斗生物。');
+      return { name: entry.name, hp: entry.hp, maxHp: entry.hp, armor: entry.armor,
+        maxArmor: entry.armor, speed: entry.speed, attack: entry.attack, defense: entry.defense };
+    }
+    check(args.length === 6, '格式：。战斗 开始 怪名；也可附 HP 护甲 速度 攻击 防御');
     const hp = number(args[1], 1, 999);
     const armor = number(args[2], 0, ARMOR_CAP);
     return {
@@ -243,6 +257,12 @@
   }
 
   function status(room, event = '') {
+    const exploration = explorationPrompt(room);
+    if (room.exploration && (room.phase === 'lobby' || !room.order)) {
+      const roster = room.players.map(entry => playerName(entry) + ' ｜ ' + meters(entry));
+      return [room.phase === 'defeat' ? '❄️【小队倒下】' : '🧭【探索】', event, exploration]
+        .concat(roster).filter(Boolean).join('\n');
+    }
     if (room.phase === 'lobby') {
       return (event ? event + '\n' : '') + '🏕️【小队集结】\n' +
         (room.players.map(playerName).join('、') || '等待队员加入') +
@@ -262,7 +282,8 @@
     const lines = ['❄️【' + header + '】'];
     if (room.phase === 'battle') lines.push(battlePrompt(room));
     if (event) lines.push(event);
-    if (room.phase === 'rest') lines.push('可发送「。治疗 角色名或编号」，由带队开启下一场。');
+    if (exploration) lines.push(exploration);
+    if (room.phase === 'rest' && !room.exploration) lines.push('可发送「。治疗 角色名或编号」，由带队开启下一场。');
     return lines.concat(order).join('\n');
   }
 
@@ -412,6 +433,104 @@
   const management = ['喊话设置', '开始', '收队', '移除'];
   const actions = ['攻击', '解析', '自析', '求助', '格挡', '闪避', '喊话', '结算', '跳过', '投掷', '奖励', '伤害'];
 
+  const TRAPS = [
+    { name: '覆雪薄冰', clue: '前人的脚印绕开一片雪，雪下隐约有流水声。', reveal: '雪下的薄冰承不住人，沿岸有一道能走的窄路。', avoid: '及时跳回了硬地。', fail: '踩碎薄冰，跌进了冰水。', damage: 2 },
+    { name: '冰缝蛛丝', clue: '洞口横着一根结霜的细线，风吹过也没动。', reveal: '是冰缝蛛的蛛丝，沿洞壁可以绕过去。', avoid: '及时从蛛丝中抽开脚。', fail: '脚踝被蛛丝缠住，冰缝蛛从侧面爬出。', enemy: 'ice-crevice-spider' },
+    { name: '藏雪警铃', clue: '两棵树的树皮上各有一道新勒痕。', reveal: '雪下的绊线连着一个警铃，树外侧可以绕行。', avoid: '在绊线被拉紧前收住脚。', fail: '绊线扯响了铃铛，巡逻的灰狼循声而来。', enemy: 'gray-wolf' },
+    { name: '折枝套索', clue: '小径边有根树枝反常地弯向地面。', reveal: '拉弯的树枝连着套索，外侧的雪地没有绳圈。', avoid: '及时缩脚，绳圈空荡荡地弹了起来。', fail: '被套索吊住，随后由队伍解开。', damage: 1 },
+    { name: '冰锥怪伏击', clue: '洞顶一根冰锥晃了一下，附近却没有风。', reveal: '冰锥正在挪动，是一只伏击的冰锥怪。', avoid: '躲过了洞顶的坠击。', fail: '被从洞顶落下的冰锥怪击中。', damage: 2, enemy: 'ice-piercer', alwaysBattle: true }
+  ];
+
+  function choose(entries) {
+    return entries[Math.floor(Math.random() * entries.length)];
+  }
+
+  function beginEncounter(data, ctx, room, enemy) {
+    for (const member of room.players) refreshPlayer(data, ctx, room, member);
+    if (room.exploration) {
+      room.exploration.safe = false;
+      delete room.exploration.trap;
+    }
+    start(room, enemy);
+  }
+
+  function explore(data, ctx, room, player, isLeader, words) {
+    check(words.length <= 1, '用法：。探索 / 。探索 查看 / 。探索 绕开 / 。探索 前进 / 。探索 整备');
+    const action = words[0];
+    const current = room.exploration || { calm: 0, safe: false };
+    check(room.phase === 'lobby' || room.phase === 'rest', '先完成当前战斗。');
+    check(player && player.hp > 0, '由仍可行动的队员探索。');
+    if (action === '整备') {
+      check(current.safe && !current.trap, '风平浪静时才能整备。');
+      room.exploration = current;
+      return '队伍停下整备。可用「。治疗 角色名或编号」恢复 HP，或用「。探索」继续。';
+    }
+    if (current.trap) {
+      const pending = current.trap;
+      const trap = TRAPS[pending.index];
+      check(['查看', '绕开', '前进'].includes(action), '先处理眼前的线索：' + trap.clue);
+      check(player.uid === pending.uid || isLeader && action === '绕开', '由发现线索的队员处理，带队可指挥绕开。');
+      if (action === '查看') {
+        check(!pending.checked, '这条线索已经查看过。');
+        pending.checked = true;
+        const dice = roll();
+        pending.surveyed = dice <= player.stats.insight;
+        return '洞察检定：D100=' + dice + '/' + player.stats.insight + '\n' +
+          (pending.surveyed ? '成功。' + trap.reveal : '失败。你暂时看不清是什么。');
+      }
+      delete current.trap;
+      if (action === '绕开' || pending.surveyed) return '小队避开了' + trap.name + '。';
+      const dice = roll();
+      const avoided = dice <= player.stats.agility;
+      let event = '灵敏检定：D100=' + dice + '/' + player.stats.agility + '\n' +
+        playerName(player) + (avoided ? trap.avoid : trap.fail);
+      if (!avoided && trap.damage) event += '\n' + damage(player, trap.damage);
+      if (!room.players.some(member => member.hp > 0)) {
+        room.phase = 'defeat';
+      } else if (trap.enemy && (!avoided || trap.alwaysBattle)) {
+        beginEncounter(data, ctx, room, encounter([trap.enemy]));
+        event += '\n' + room.enemy.name + '出现了。';
+      }
+      return event;
+    }
+    check(!action || action === '前进', '当前没有待处理的陷阱。');
+    const library = monsterLibrary();
+    const dice = roll();
+    const adjusted = current.calm >= 2;
+    const safeLimit = adjusted ? 30 : 40;
+    const battleLimit = adjusted ? 70 : 75;
+    room.exploration = current;
+    current.safe = dice <= safeLimit;
+    current.calm = current.safe ? current.calm + 1 : 0;
+    if (current.safe) {
+      for (const member of room.players) member.healUsed = false;
+      return choose([
+        '似乎周围风平浪静，雪地上只有几行小小的脚印。',
+        '一只雪靴兔窜过雪地，很快没入灌木丛。周围风平浪静。',
+        '风声渐轻，前方有一块背风的空地。周围风平浪静。'
+      ]);
+    }
+    if (dice <= battleLimit) {
+      const pool = library.listWinter().filter(entry => entry.role !== '非战斗');
+      check(pool.length, '怪物库里没有可抽取的战斗遭遇。');
+      const enemy = encounter([choose(pool).id]);
+      beginEncounter(data, ctx, room, enemy);
+      return enemy.name + ' 出现了。';
+    }
+    const index = Math.floor(Math.random() * TRAPS.length);
+    current.trap = { index, uid: player.uid, checked: false };
+    return playerName(player) + ' 发现线索：' + TRAPS[index].clue;
+  }
+
+  function explorationPrompt(room) {
+    const current = room.exploration;
+    if (!current || room.phase === 'battle' || room.phase === 'defeat') return '';
+    if (current.trap) {
+      return '。探索 查看 ｜ 。探索 绕开 ｜ 。探索 前进';
+    }
+    return current.safe ? '。探索 整备 ｜ 。治疗 角色名或编号 ｜ 。探索' : '发送「。探索」继续前进。';
+  }
+
   function run(ctx, msg, commandName, words) {
     const cmd = words.shift();
     const inGroup = msg.messageType === 'group';
@@ -449,7 +568,10 @@
     const isLeader = leader(ctx, room);
     let event = '';
 
-    if (cmd === '加入') {
+    if (cmd === '探索') {
+      check(inGroup, '在小队群发送探索指令。');
+      event = explore(data, ctx, room, player, isLeader, words);
+    } else if (cmd === '加入') {
       check(inGroup && room.phase === 'lobby', '请在开战前到队群加入。');
       check(words.length <= 1, '格式：。战斗 加入 [角色编号]');
       check(!joined, joined === key ? '你已在本队。' : '你已加入另一支小队。');
@@ -482,9 +604,9 @@
       if (cmd === '开始') {
         check(room.phase === 'lobby' || room.phase === 'rest', '当前阶段无法开始新遭遇。');
         check(room.players.some(entry => entry.hp > 0), '需要至少一位仍可行动的队员。');
+        check(!room.exploration || !room.exploration.trap, '先处理眼前的陷阱。');
         const enemy = encounter(words);
-        for (const member of room.players) refreshPlayer(data, ctx, room, member);
-        start(room, enemy);
+        beginEncounter(data, ctx, room, enemy);
         event = enemy.name + ' 出现了。';
       }
     } else if (cmd === '退出') {
@@ -492,7 +614,10 @@
       room.players = room.players.filter(entry => entry !== player);
       event = playerName(player) + ' 离开小队。';
     } else if (cmd === '治疗') {
-      check(room.phase === 'rest' && player && player.hp > 0 && !player.healUsed, '每次整备中，可行动的队员各能治疗一次。');
+      const canHeal = room.exploration
+        ? room.exploration.safe && !room.exploration.trap && ['lobby', 'rest'].includes(room.phase)
+        : room.phase === 'rest';
+      check(canHeal && player && player.hp > 0 && !player.healUsed, '每次整备中，可行动的队员各能治疗一次。');
       const selector = words.join(' ').trim();
       check(selector, '格式：。治疗 角色名或编号');
       // 纯数字优先匹配旧有角色编号，其他输入按完整角色名匹配。
@@ -644,6 +769,7 @@
     战斗: HELP,
     录入: INPUT,
     投掷: '。投掷 物品名',
+    探索: '。探索 [查看|绕开|前进|整备]',
     攻击: '。攻击 [解析|直击|求助]',
     奖励: '。奖励',
     伤害: '。伤害',

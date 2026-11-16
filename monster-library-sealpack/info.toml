@@ -1,0 +1,35 @@
+format_version = "1.0.0"
+
+[package]
+id = "kiakio/h11-monster-library"
+name = "H11 怪物库"
+version = "1.1.0"
+authors = ["Faye"]
+license = "All Rights Reserved"
+description = "独立怪物、探索区域及副本数据"
+keywords = ["sealdice", "H11"]
+
+[package.seal]
+min_version = "1.6.0"
+
+[dependencies]
+
+[permissions]
+network = false
+file_read = []
+file_write = []
+
+[contents]
+scripts = ["scripts/*.js"]
+decks = []
+reply = []
+helpdoc = []
+templates = []
+
+[store]
+readme = "README.md"
+banner = ""
+screenshots = []
+category = "tool"
+
+[config]
