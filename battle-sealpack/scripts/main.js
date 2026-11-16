@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.2.0
+// @version 0.2.1
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -19,9 +19,9 @@
     '❄️【圣布里吉 · 战斗指令】',
     '带队：。战斗 开队 → 队员各发 。战斗 加入 → 。战斗 开始',
     '攻击：。战斗 攻击 → 直接 或 解析；选择解析后可选 自析 或 求助',
-    '遇袭：。战斗 格挡 或 。战斗 闪避，尾加「求助」可等待喊话',
+    '遇袭：。格挡 或 。闪避，尾加「求助」可等待喊话',
     '队友：。战斗 喊话 行动码；无人喊话时由当事人或带队发 。战斗 结算 行动码',
-    '其他：。战斗 状态 / 跳过 / 治疗 角色编号；带队可发 。战斗 收队',
+    '其他：。战斗 状态 / 。跳过 / 。治疗 角色编号；带队可发 。收队',
     INPUT + '（在小窗可录入当前角色）',
     '查看属性：。战斗 档案 ｜ 装备：。战斗 穿戴 装备名 / 脱下 装备名',
     '独立指令：。投掷 物品名（灵敏检定，成功造成 2 点伤害）',
@@ -29,7 +29,7 @@
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.0');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.1');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -239,14 +239,14 @@
       return mark + name + ' ｜ ' + meters(target);
     });
     let prompt = '';
-    if (room.phase === 'rest') prompt = '可发送「。战斗 治疗 编号」，由带队开启下一场。';
+    if (room.phase === 'rest') prompt = '可发送「。治疗 编号」，由带队开启下一场。';
     if (room.phase === 'battle') {
-      if (!room.pending) prompt = '轮到 ' + playerName(activePlayer(room)) + ' ｜ 。战斗 攻击 / 。战斗 跳过';
+      if (!room.pending) prompt = '轮到 ' + playerName(activePlayer(room)) + ' ｜ 。战斗 攻击 / 。跳过';
       else {
         const pending = room.pending;
         if (pending.kind === 'defense') {
           prompt = '⚠️ ' + room.enemy.name + ' 攻向 ' + playerName(room.players.find(p => p.uid === pending.target)) +
-            '\n。战斗 格挡 或 。战斗 闪避；尾加「求助」可等待喊话。';
+            '\n。格挡 或 。闪避；尾加「求助」可等待喊话。';
         } else {
           const target = room.players.find(player => player.uid === pending.target);
           prompt = '📣 ' + playerName(target) + (pending.kind === 'attack' ? ' 攻击 ' + room.enemy.name + '，请求要害解析' :
@@ -395,7 +395,7 @@
     let room = inGroup ? data.rooms[key] : joined ? data.rooms[joined] : null;
     if (cmd === '开队') {
       check(inGroup && ctx.privilegeLevel >= 50, '请由队群管理员、群主或骰主开队。');
-      check(!room, '本群已有小队，请先「。战斗 收队」。');
+      check(!room, '本群已有小队，请先「。收队」。');
       room = { groupId: group, host: id, phase: 'lobby', players: [], rules: 2 };
       data.rooms[key] = room;
       return { data, text: status(room) };
@@ -571,13 +571,23 @@
     ext.cmdMap[name] = command;
   }
 
-  registerCommand('战斗', HELP, []);
-  registerCommand('录入', INPUT, ['录入']);
-  registerCommand('投掷', '。投掷 物品名', ['投掷']);
+  const commands = {
+    战斗: HELP,
+    录入: INPUT,
+    投掷: '。投掷 物品名',
+    格挡: '。格挡 [求助]',
+    闪避: '。闪避 [求助]',
+    跳过: '。跳过',
+    治疗: '。治疗 角色编号',
+    收队: '。收队'
+  };
+  for (const [name, help] of Object.entries(commands)) {
+    registerCommand(name, help, name === '战斗' ? [] : [name]);
+  }
   ext.onNotCommandReceived = (ctx, msg) => {
     const input = String(msg.message || '').trim();
-    const match = /^[。，]((?:战斗|投掷|录入))(?:\s+(.+))?$/.exec(input);
-    if (!match) return;
+    const match = /^[。，]([^\s]+)(?:\s+(.+))?$/.exec(input);
+    if (!match || !hasOwn(commands, match[1])) return;
     const words = match[2] ? match[2].split(/\s+/) : [];
     if (match[1] !== '战斗') words.unshift(match[1]);
     execute(ctx, msg, words);
