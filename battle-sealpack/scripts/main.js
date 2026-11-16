@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.2.5
+// @version 0.2.6
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -15,10 +15,12 @@
   const ARMOR_CAP = 8;
   const INPUT = '。录入 速度60，灵敏65，洞察50，攻击70，防御40';
   const ACTIONS = { attack: '攻击', block: '格挡', dodge: '闪避' };
+  const CRITICAL_OPTIONS = '。奖励 ｜ 。伤害';
   const HELP = [
     '❄️【圣布里吉 · 战斗指令】',
     '带队：。战斗 开队 → 队员各发 。战斗 加入 → 。战斗 开始',
     '攻击：。攻击 或 。攻击 直击，立即掷骰；。攻击 求助，等待队友喊话',
+    '大成功由出手者选择：。奖励（下次攻击用奖励骰）或 。伤害（本次伤害 +30%）',
     '解析：。战斗 解析 或 。攻击 解析 → 。战斗 自析 或 。战斗 求助',
     '遇袭：。格挡 或 。闪避，尾加「求助」可等待喊话',
     '队友：。喊话 行动码；无人喊话时由当事人或带队发 。结算 行动码',
@@ -31,7 +33,7 @@
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.5');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.6');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -235,6 +237,7 @@
     if (pending.kind === 'defense') {
       return room.enemy.name + '向' + target + '发起了攻击\n。闪避 ｜ 。格挡';
     }
+    if (pending.kind === 'critical') return pending.report + '\n' + CRITICAL_OPTIONS;
     return '📣【等待喊话】' + target + ' 请求协助' + ACTIONS[pending.kind] +
       '\n队友 。喊话 ' + pending.code + ' ｜ 当事人或带队 。结算 ' + pending.code;
   }
@@ -248,7 +251,8 @@
     const header = { battle: '第 ' + room.round + ' 轮', rest: '整备', defeat: '小队倒下' }[room.phase];
     const pending = room.pending;
     const current = room.phase !== 'battle' ? null : pending ? pending.target : room.order[room.turn];
-    const currentMark = !pending ? '⚔️ ' : pending.kind === 'defense' ? '🛡️ ' : '📣 ';
+    const currentMark = !pending || pending.kind === 'critical' ? '⚔️ ' :
+      pending.kind === 'defense' ? '🛡️ ' : '📣 ';
     const order = room.order.map(key => {
       const target = key === 'enemy' ? room.enemy : room.players.find(player => player.uid === key);
       const name = key === 'enemy' ? target.name : playerName(target);
@@ -306,9 +310,18 @@
     return Math.max(0, Math.min(100, value));
   }
 
-  function strikeDamage(attacker, defender, reduction) {
+  function strikeDamage(attacker, defender, reduction, multiplier = 1, minimum = 0) {
     const force = 2 + Math.floor(attacker.attack / 20);
-    return Math.max(0, force - Math.floor(defender.defense / 20) - reduction);
+    return Math.max(minimum, Math.round(force * multiplier) - Math.floor(defender.defense / 20) - reduction);
+  }
+
+  function attackGrade(dice, threshold) {
+    if (dice === 100 || (threshold < 50 && dice >= 96)) return '大失败';
+    if (dice > threshold) return '失败';
+    if (dice === 1) return '大成功';
+    if (dice * 5 <= threshold) return '极难成功';
+    if (dice * 2 <= threshold) return '困难成功';
+    return '普通成功';
   }
 
   function settle(room, kind, player, helper, selfAnalysis) {
@@ -326,10 +339,30 @@
     const enemy = room.enemy;
     const stats = player.stats;
     if (kind === 'attack') {
-      const dice = roll();
+      let dice = roll();
+      if (player.attackBonusDie) {
+        const alternate = Math.floor(Math.random() * 10) * 10 + dice % 10 || 100;
+        lines.push('奖励骰：' + dice + ' / ' + alternate + '，取 ' + Math.min(dice, alternate));
+        dice = Math.min(dice, alternate);
+        player.attackBonusDie = false;
+      }
       const threshold = chance(stats.attack + bonus);
-      lines.push(playerName(player) + ' 攻击 ' + enemy.name + ' ｜ 命中 ' + dice + '/' + threshold + ' ｜ ' +
-        (dice <= threshold ? damage(enemy, strikeDamage(stats, enemy, 0)) : '未命中'));
+      const grade = attackGrade(dice, threshold);
+      lines.push(playerName(player) + ' 攻击 ' + enemy.name,
+        '攻击检定：D100=' + dice + '/' + threshold + ' ' + grade);
+      if (grade === '大成功') {
+        room.pending = {kind: 'critical', target: player.uid, report: lines.join('\n')};
+        return '';
+      }
+      if (grade === '大失败') {
+        player.hp = Math.max(0, player.hp - 1);
+        lines.push('未命中，' + playerName(player) + ' 自伤 1 HP。');
+      } else if (grade === '失败') {
+        lines.push('未命中。');
+      } else {
+        const multiplier = { 普通成功: 1, 困难成功: 1.1, 极难成功: 1.2 }[grade];
+        lines.push(damage(enemy, strikeDamage(stats, enemy, 0, multiplier, 1)));
+      }
     } else {
       let threshold = enemy.attack;
       let reduction = 0;
@@ -368,6 +401,7 @@
     room.round = 1;
     room.turn = 0;
     for (const player of room.players) {
+      player.attackBonusDie = false;
       player.spentCalls = 0;
       player.lastCall = 0;
       player.nextCall = 1;
@@ -376,7 +410,7 @@
   }
 
   const management = ['喊话设置', '开始', '收队', '移除'];
-  const actions = ['攻击', '解析', '自析', '求助', '格挡', '闪避', '喊话', '结算', '跳过', '投掷'];
+  const actions = ['攻击', '解析', '自析', '求助', '格挡', '闪避', '喊话', '结算', '跳过', '投掷', '奖励', '伤害'];
 
   function run(ctx, msg, commandName, words) {
     const cmd = words.shift();
@@ -481,7 +515,19 @@
       const pending = room.pending;
       const current = pending ? room.players.find(entry => entry.uid === pending.target) : activePlayer(room);
       const mine = current.uid === id;
-      if (cmd === '喊话' || cmd === '结算') {
+      if (cmd === '奖励' || cmd === '伤害') {
+        check(pending && pending.kind === 'critical', '当前没有等待选择的大成功。');
+        check(mine, '由本次出手者选择奖励或伤害。');
+        check(!words.length, '使用「。奖励」或「。伤害」。');
+        const wantsReward = cmd === '奖励';
+        if (wantsReward) current.attackBonusDie = true;
+        const hit = strikeDamage(current.stats, room.enemy, 0, wantsReward ? 1 : 1.3, 1);
+        event = playerName(current) + (wantsReward ? ' 获得下次攻击的奖励骰' : ' 选择伤害 +30%') +
+          '\n' + playerName(current) + ' 命中 ' + room.enemy.name + ' ｜ ' + damage(room.enemy, hit);
+        advance(room, true);
+      } else if (pending && pending.kind === 'critical') {
+        return { text: battlePrompt(room) };
+      } else if (cmd === '喊话' || cmd === '结算') {
         check(pending && pending.code && words.length === 1 && words[0] === pending.code, '该行动码已失效或尚未开放喊话。');
         if (cmd === '喊话') {
           check(!mine && player.hp > 0, '只能为当前队友喊话，倒下时无法喊话。');
@@ -599,6 +645,8 @@
     录入: INPUT,
     投掷: '。投掷 物品名',
     攻击: '。攻击 [解析|直击|求助]',
+    奖励: '。奖励',
+    伤害: '。伤害',
     喊话: '。喊话 行动码',
     结算: '。结算 行动码',
     格挡: '。格挡 [求助]',
