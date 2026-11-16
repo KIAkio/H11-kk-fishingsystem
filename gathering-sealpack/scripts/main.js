@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精采集系统
 // @author       KIAkio
-// @version      1.0.0
+// @version      1.1.2
 // @description  野外蘑菇与浆果采集，按稀有度随机获取并接入共享背包
 // ==/UserScript==
 
@@ -9,7 +9,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_gathering_system';
-  const VERSION = '1.1.1';
+  const VERSION = '1.1.2';
   const DATA_VAR = '$m地精背包数据';
 
   if (seal.ext.find(EXT_ID)) {
@@ -81,14 +81,26 @@
     return list[list.length - 1];
   }
 
-  function h11role(c){const r=seal.vars.strGet(c,'$g地精档案编号表'),raw=Array.isArray(r)?r[0]:'';if(!raw)throw Error('请先注册营地角色。');let p;try{p=JSON.parse(raw)}catch(e){throw Error('营地档案损坏，停止写入。')}const uid=String(c.player&&(c.player.userId||c.player.id)||''),list=p.members&&p.members[uid],arr=Array.isArray(list)?list:list?[list]:[];const id=p.active&&p.active[uid]||arr[0]&&arr[0].id;if(!id)throw Error('请先注册营地角色。');return String(c.group&&(c.group.groupId||c.group.id)||'private')+'::'+String(id).padStart(3,'0')}
+  function h11role(c) {
+    const camp = globalThis.H11CampProfiles;
+    const r = camp ? null : seal.vars.strGet(c,'$g地精档案编号表');
+    const raw = Array.isArray(r) ? r[0] : '';
+    const profiles = camp ? camp.read(c) : raw ? JSON.parse(raw) : {};
+    const uid = String(c.player && (c.player.userId || c.player.id) || '');
+    const own = profiles.members && profiles.members[uid];
+    const roles = Array.isArray(own) ? own : own ? [own] : [];
+    const role = roles.find(entry => entry.id === (profiles.active || {})[uid]) || roles[0];
+    if (!role) throw Error('请先注册营地角色。');
+    const group = camp ? camp.groupKey(c) : String(c.group && (c.group.groupId || c.group.id) || 'private');
+    return group+'::'+String(role.id).padStart(3,'0');
+  }
   function h11read(c){const r=seal.vars.strGet(c,'$mH11角色数据仓库'),raw=Array.isArray(r)?r[0]:'';if(!raw)return {};try{return JSON.parse(raw)}catch(e){throw Error('角色存档损坏，停止写入。')}}
     function addToSharedBackpack(ctx, item) {
     if (!seal.vars || typeof seal.vars.strGet !== 'function' || typeof seal.vars.strSet !== 'function') {
       throw new Error('无法访问共享背包变量，请确认已安装并启用「地精背包核心」。');
     }
 
-    const store=h11read(ctx),role=h11role(ctx);
+    const role=h11role(ctx),store=h11read(ctx);
     const raw=store[role] ? JSON.stringify(store[role]) : '';
     let data;
     if (raw) {

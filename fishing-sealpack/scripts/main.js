@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         动物森友会钓鱼系统
 // @author       Faye
-// @version      3.4.5
+// @version      3.4.6
 // @description  扩充淡水鱼类与稀有度抽取、两秒钓鱼、背包与排行榜
 // ==/UserScript==
 
@@ -14,7 +14,7 @@
 
     if (seal.ext.find(EXT_ID)) return;
 
-    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.5');
+    const ext = seal.ext.new(EXT_ID, 'Faye', '3.4.6');
 
     // 稀有度权重：普通70%、少见24%、稀有6%
     const RARITY = {
@@ -199,6 +199,7 @@
     }
 
     function getGroupId(ctx, msg) {
+        if (globalThis.H11CampProfiles) return globalThis.H11CampProfiles.groupKey(ctx);
         return String(
             msg.groupId ||
             (ctx.group && ctx.group.groupId) ||
@@ -222,17 +223,42 @@
         );
     }
 
+    function getProfiles(ctx) {
+        if (globalThis.H11CampProfiles) return globalThis.H11CampProfiles.read(ctx);
+        const result = seal.vars.strGet(ctx, '$g地精档案编号表');
+        const raw = Array.isArray(result) ? result[0] : '';
+        return raw ? JSON.parse(raw) : {};
+    }
+
+    function migratePlayer(data, profiles, userId, roleId, key) {
+        if (data.players[key]) return;
+        const prefix = userId + '::';
+        for (const [source, target] of Object.entries(profiles.imports || {})) {
+            if (!source.startsWith(prefix) || target !== roleId) continue;
+            const split = source.lastIndexOf('::');
+            const oldGroup = source.slice(prefix.length, split);
+            const oldId = source.slice(split + 2);
+            const groups = oldGroup.startsWith('PG-QQ:') ? [oldGroup, 'private'] : [oldGroup];
+            const oldKey = groups.map(group => group + ':' + userId + ':' + oldId)
+                .find(candidate => data.players[candidate]);
+            if (!oldKey) continue;
+            data.players[key] = data.players[oldKey];
+            delete data.players[oldKey];
+            return;
+        }
+    }
+
     // 创建或读取玩家
     function getPlayer(data, groupId, userId, name, ctx) {
         if (!data.players) data.players = {};
 
-        const pr=seal.vars.strGet(ctx,'$g地精档案编号表'),raw=Array.isArray(pr)?pr[0]:'';
-        if(!raw)throw Error('请先注册营地角色。');
-        let profiles;try{profiles=JSON.parse(raw)}catch(e){throw Error('营地档案存档损坏。')}
+        const profiles = getProfiles(ctx);
         const own=profiles.members&&profiles.members[userId],arr=Array.isArray(own)?own:own?[own]:[];
         const selected=arr.find(x=>x.id===(profiles.active||{})[userId])||arr[0];
         if(!selected)throw Error('请先注册营地角色。');
-        const key = groupId + ':' + userId + ':' + String(selected.id).padStart(3,'0');
+        const roleId = String(selected.id).padStart(3,'0');
+        const key = groupId + ':' + userId + ':' + roleId;
+        migratePlayer(data, profiles, userId, roleId, key);
 
         // 旧存档迁移在初始化新档案之前进行。
         const legacyKey=groupId+':'+userId;
@@ -259,7 +285,7 @@
             const result=seal.vars.strGet(ctx,'$mH11角色数据仓库');
             const rawStore=Array.isArray(result)?result[0]:'';
             let store={};if(rawStore){try{store=JSON.parse(rawStore)}catch(e){throw Error('角色背包存档损坏，未迁移历史鱼获。')}}
-            const role=String(ctx.group&&(ctx.group.groupId||ctx.group.id)||groupId)+'::'+String(selected.id).padStart(3,'0');
+            const role=groupId+'::'+String(selected.id).padStart(3,'0');
             const bag=store[role]||{items:{}};
             if(!bag.items)bag.items={};
             if(!bag.items.fish)bag.items.fish={};
@@ -338,15 +364,12 @@
             throw new Error('无法访问共享背包变量，请确认已安装并启用「地精背包核心」。');
         }
 
-        const profileResult=seal.vars.strGet(ctx,'$g地精档案编号表');
-        const profileRaw=Array.isArray(profileResult)?profileResult[0]:'';
-        if(!profileRaw)throw Error('请先注册营地角色。');
-        let profiles;try{profiles=JSON.parse(profileRaw)}catch(e){throw Error('角色档案损坏，停止写入。')}
+        const profiles = getProfiles(ctx);
         const uid=String(ctx.player&&(ctx.player.userId||ctx.player.id)||'');
         const own=profiles.members&&profiles.members[uid],arr=Array.isArray(own)?own:own?[own]:[];
         const selected=arr.find(x=>x.id===(profiles.active||{})[uid])||arr[0];
         if(!selected)throw Error('请先注册营地角色。');
-        const role=String(ctx.group&&(ctx.group.groupId||ctx.group.id)||'private')+'::'+String(selected.id).padStart(3,'0');
+        const role=getGroupId(ctx,{})+'::'+String(selected.id).padStart(3,'0');
         const variableName='$mH11角色数据仓库';
         const result=seal.vars.strGet(ctx,variableName);
         const raw=Array.isArray(result)?result[0]:'';
@@ -583,14 +606,14 @@
                 ctx
             );
 
+            saveData(data);
+
             // 图鉴展示全部历史鱼获，关闭的海鱼仍保留；同时补充旧背包中已有但鱼篓未记录的鱼。
             const itemsByName = new Map();
             for (const item of Object.values(player.bag || {})) {
                 if (item && item.name && Number(item.count) > 0) itemsByName.set(item.name, Object.assign({}, item));
             }
-            const roleProfiles = seal.vars.strGet(ctx, '$g地精档案编号表');
-            const roleRaw = Array.isArray(roleProfiles) ? roleProfiles[0] : '';
-            const profiles = roleRaw ? JSON.parse(roleRaw) : {};
+            const profiles = getProfiles(ctx);
             const uid = getUserId(ctx, msg);
             const roles = profiles.members && profiles.members[uid];
             const roleList = Array.isArray(roles) ? roles : roles ? [roles] : [];
@@ -599,7 +622,7 @@
             const storeResult = seal.vars.strGet(ctx, '$mH11角色数据仓库');
             const storeRaw = Array.isArray(storeResult) ? storeResult[0] : '';
             const store = storeRaw ? JSON.parse(storeRaw) : {};
-            const groupKey = String(ctx.group && (ctx.group.groupId || ctx.group.id) || getGroupId(ctx, msg));
+            const groupKey = getGroupId(ctx,msg);
             const storedFish = ((store[groupKey + '::' + roleId] || {}).items || {}).fish || {};
             for (const [name, entry] of Object.entries(storedFish)) {
                 if (!entry || Number(entry.count) <= 0 || itemsByName.has(name)) continue;

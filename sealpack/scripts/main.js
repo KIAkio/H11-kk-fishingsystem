@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.4
+// @version      1.8.5
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.4';
+  const VERSION = '1.8.5';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
@@ -176,7 +176,7 @@
   function getPlayerId(ctx) {
     return String(ctx.player && (ctx.player.userId || ctx.player.id) || '').trim();
   }
-  function groupKey(ctx) {
+  function sourceGroupKey(ctx) {
     return String(ctx.group && (ctx.group.groupId || ctx.group.id) || 'private');
   }
   function jsonRead(ctx, key, fallback) {
@@ -185,7 +185,7 @@
     try { return JSON.parse(raw); } catch (e) { throw new Error('存档 '+key+' 解析失败，已停止写入以保护数据。'); }
   }
   function jsonWrite(ctx, key, value) { seal.vars.strSet(ctx, key, JSON.stringify(value)); }
-  function loadGroupProfiles(ctx) {
+  function readGroupProfiles(ctx) {
     const p = jsonRead(ctx, GROUP_PROFILE_VAR, { nextId: 0, members: {}, active: {} });
     if (!p.members || typeof p.members !== 'object') p.members = {};
     if (!p.active || typeof p.active !== 'object') p.active = {};
@@ -200,13 +200,110 @@
     p.nextId = Math.max(0, Number(p.nextId)||0, highest+1);
     return p;
   }
-  function saveGroupProfiles(ctx,p) { jsonWrite(ctx,GROUP_PROFILE_VAR,p); }
+  const CAMP_SETTING = 'h11_primary_group';
+  const ATTENDANCE_STORE = '$mH11角色点名仓库';
+  const CAMP_QUEUE = '$gH11待发放物品';
+  const CAMP_RANK = '$g冬训营点名排行';
+
+  function temporaryContext(ctx, uid, groupId) {
+    const endpoint = ctx.endPoint;
+    if (!endpoint) throw Error('无法读取机器人接入端。');
+    const msg = seal.newMessage();
+    msg.platform = endpoint.platform;
+    msg.messageType = groupId ? 'group' : 'private';
+    msg.groupId = groupId || '';
+    msg.sender.userId = uid;
+    const result = seal.createTempCtx(endpoint, msg);
+    if (!result || !result.group || getPlayerId(result) !== uid) {
+      throw Error('无法读取该会话的营地存档。');
+    }
+    return result;
+  }
+
+  function groupContext(ctx) {
+    const id = ext.storageGet(CAMP_SETTING);
+    if (!id || !getPlayerId(ctx).startsWith('QQ:') || sourceGroupKey(ctx) === id) return ctx;
+    const target = temporaryContext(ctx, getPlayerId(ctx), id);
+    if (sourceGroupKey(target) !== id) throw Error('无法读取主群档案。');
+    return target;
+  }
+
+  function groupKey(ctx) { return sourceGroupKey(groupContext(ctx)); }
+
+  function migrateProfiles(source, target, profiles) {
+    const from = sourceGroupKey(source), to = sourceGroupKey(target), uid = getPlayerId(source);
+    if (from === to) return 0;
+    const old = readGroupProfiles(source), roles = old.members[uid] || [];
+    if (!roles.length) return 0;
+    const mine = profiles.members[uid] || [];
+    const imports = profiles.imports || {};
+    const stores = [ROLE_STORE, ATTENDANCE_STORE].map(key => [key, jsonRead(source,key,{})]);
+    const markerKey = '$mH11旧存档迁移标记';
+    const marker = jsonRead(source,markerKey,{});
+    const sourceRank = jsonRead(source,CAMP_RANK,{members:{}});
+    const targetRank = jsonRead(target,CAMP_RANK,{members:{}});
+    const sourceQueue = jsonRead(source,CAMP_QUEUE,{});
+    const targetQueue = jsonRead(target,CAMP_QUEUE,{});
+    const active = old.active[uid];
+    for (const role of roles) {
+      const oldKey = from+'::'+role.id, importKey = uid+'::'+oldKey;
+      let nextId = imports[importKey];
+      if (!nextId) {
+        const existing = mine.find(entry => entry.name === role.name);
+        nextId = existing ? existing.id : String(profiles.nextId++).padStart(3,'0');
+        if (!existing) mine.push(Object.assign({}, role, {id:nextId}));
+        imports[importKey] = nextId;
+      }
+      const newKey = to+'::'+nextId;
+      for (const [key, store] of stores) {
+        if (!Object.prototype.hasOwnProperty.call(store,oldKey)) continue;
+        if (Object.prototype.hasOwnProperty.call(store,newKey) &&
+            JSON.stringify(store[oldKey]) !== JSON.stringify(store[newKey])) {
+          throw Error('角色「'+role.name+'」在两边都有不同的'+(key===ROLE_STORE?'背包':'点名')+'记录，待核对后合并。');
+        }
+        store[newKey] = store[oldKey];
+      }
+      const oldRankKey = uid+'::'+oldKey, newRankKey = uid+'::'+newKey;
+      if (sourceRank.members[oldRankKey]) targetRank.members[newRankKey] = sourceRank.members[oldRankKey];
+      const oldQueueKey = uid+'::'+role.id, newQueueKey = uid+'::'+nextId;
+      if (sourceQueue[oldQueueKey] && !targetQueue[newQueueKey]) targetQueue[newQueueKey] = sourceQueue[oldQueueKey];
+      if (marker.destination === oldKey) marker.destination = newKey;
+      if (role.id === active) profiles.active[uid] = nextId;
+    }
+    profiles.members[uid] = mine;
+    profiles.imports = imports;
+    jsonWrite(target,GROUP_PROFILE_VAR,profiles);
+    for (const [key, store] of stores) jsonWrite(source,key,store);
+    if (marker.done) jsonWrite(source,markerKey,marker);
+    jsonWrite(target,CAMP_RANK,targetRank);
+    jsonWrite(target,CAMP_QUEUE,targetQueue);
+    // 先写入新档案，再撤销旧会话编号。映射保留给钓鱼图鉴迁移使用。
+    delete old.members[uid];
+    delete old.active[uid];
+    jsonWrite(source,GROUP_PROFILE_VAR,old);
+    return roles.length;
+  }
+
+  function loadGroupProfiles(ctx) {
+    const target = groupContext(ctx);
+    const profiles = readGroupProfiles(target);
+    migrateProfiles(ctx,target,profiles);
+    return profiles;
+  }
+
+  function saveGroupProfiles(ctx,p) { jsonWrite(groupContext(ctx),GROUP_PROFILE_VAR,p); }
   function currentRole(ctx) {
     const p=loadGroupProfiles(ctx),uid=getPlayerId(ctx);
     return (p.members[uid]||[]).find(x=>x.id===p.active[uid]) || null;
   }
   function roleKey(ctx, id) { return groupKey(ctx)+'::'+String(id); }
-  function activeKey(ctx) { return groupKey(ctx); }
+  function mayManageCamp(ctx) {
+    return Number(ctx.privilegeLevel) >= 100 ||
+      (Number(ctx.privilegeLevel) >= 50 && sourceGroupKey(ctx) === groupKey(ctx));
+  }
+
+  globalThis.H11CampProfiles = { context: groupContext, groupKey, read: loadGroupProfiles };
+
   function loadData(ctx) {
     const role=currentRole(ctx);
     if (!role) throw new Error('请先使用 .注册 姓名 创建营地角色。');
@@ -225,7 +322,7 @@
       jsonWrite(ctx,ROLE_STORE,store);
     }
     const data=applyLifeTicks(normalizeData(store[key]));
-    const queue=jsonRead(ctx,'$gH11待发放物品',{});
+    const camp=groupContext(ctx),queue=jsonRead(camp,CAMP_QUEUE,{});
     const queueKey=getPlayerId(ctx)+'::'+String(role.id).padStart(3,'0');
     const pending=Array.isArray(queue[queueKey])?queue[queueKey]:[];
     if(pending.length){
@@ -233,7 +330,7 @@
       store[key]=normalizeData(data);
       jsonWrite(ctx,ROLE_STORE,store);
       delete queue[queueKey];
-      jsonWrite(ctx,'$gH11待发放物品',queue);
+      jsonWrite(camp,CAMP_QUEUE,queue);
     }
     return data;
   }
@@ -437,9 +534,30 @@
     reply(ctx, msg, (profile.created ? (profile.duplicate ? '当前营地存在同名角色：'+profile.name+'\n为您新建档案：'+profile.name+'，'+profile.id+'，请牢记自己的编号。' : '已为您新建角色档案：'+profile.name+'，'+profile.id) : '当前账号已存在角色：'+profile.name+'（'+profile.id+'），已沿用原档案。')+'\n'+lines.join('\n')+'\n❄️'+profile.name+(profile.role==='学员'?'同学':profile.role==='教师'?'老师':'教官')+'，欢迎来到圣布里吉冬训营❄️');
   });
 
+  registerCommand('统一营地档案','骰主在目标群使用：。统一营地档案',(ctx,msg)=>{
+    const id=sourceGroupKey(ctx),current=ext.storageGet(CAMP_SETTING);
+    if(Number(ctx.privilegeLevel)<100 || !id.startsWith('QQ-Group:') || msg.messageType!=='group'){
+      reply(ctx,msg,'请用骰主账号在目标 QQ 群使用本指令。');return;
+    }
+    if(current && current!==id){
+      reply(ctx,msg,'已经绑定了另一个营地主群。');return;
+    }
+    ext.storageSet(CAMP_SETTING,id);
+    const profiles=readGroupProfiles(ctx);
+    let count=0;
+    const conflicts=[];
+    for(const uid of Object.keys(profiles.members)){
+      try { count+=migrateProfiles(temporaryContext(ctx,uid,''),ctx,readGroupProfiles(ctx)); }
+      catch(e){ conflicts.push(String(e.message||e)); }
+    }
+    reply(ctx,msg,'营地档案已统一到本群。已迁入 '+count+' 份私聊档案。'+
+      (conflicts.length?'\n待检查：'+conflicts.join('\n'):''));
+  });
+
   registerCommand('营地名单','查看当前营地全部角色',(ctx,msg)=>{
     const p=loadGroupProfiles(ctx),rows=[];
-    for(const [uid,list] of Object.entries(p.members))for(const r of list)rows.push(r.id+'｜'+r.name+'｜'+(r.role||'学员')+'｜'+uid);
+    const showAccounts = sourceGroupKey(ctx) === groupKey(ctx);
+    for(const [uid,list] of Object.entries(p.members))for(const r of list)rows.push(r.id+'｜'+r.name+'｜'+(r.role||'学员')+(showAccounts?'｜'+uid:''));
     rows.sort((a,b)=>Number(a.slice(0,3))-Number(b.slice(0,3)));
     reply(ctx,msg,'🏕️【营地名单】\n'+(rows.length?rows.join('\n'):'暂无注册角色'));
   });
@@ -448,7 +566,7 @@
     reply(ctx,msg,'📋【我的营地档案】\n'+(list.length?list.map(x=>x.id+'｜'+x.name+'｜'+(x.role||'学员')+(p.active[uid]===x.id?'（当前）':'')).join('\n'):'尚未注册'));
   });
   function changeCampRole(ctx,msg,args,reset){
-    if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'仅群管理员、群主或骰主可以任命或解除职务。');return;}
+    if(!mayManageCamp(ctx)){reply(ctx,msg,'仅群管理员、群主或骰主可以任命或解除职务。');return;}
     const raw=String(args.getArgN(1)||'').trim();
     if(!/^\d+$/.test(raw)){reply(ctx,msg,'请提供纯数字档案编号，例如：.任命 002 教官');return;}
     const id=raw.padStart(3,'0'),role=reset?'学员':String(args.getArgN(2)||'').trim();
@@ -474,7 +592,7 @@
     const p=loadGroupProfiles(ctx),self=getPlayerId(ctx),at=String(args && args.getArgN(2)||'');
     let owner=self;
     if(at.startsWith('@')){
-      if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'只有管理员可以删除他人的角色。');return;}
+      if(!mayManageCamp(ctx)){reply(ctx,msg,'只有管理员可以删除他人的角色。');return;}
       const target=seal.getCtxProxyFirst(ctx,args);
       if(!target||!target.player||!target.player.userId){reply(ctx,msg,'无法识别目标玩家。');return;}
       owner=String(target.player.userId);
@@ -498,7 +616,7 @@
     if(!pending||pending.id!==id||pending.expires<Date.now()){reply(ctx,msg,'没有待确认的删除请求，或已过期。');return;}
     const p=loadGroupProfiles(ctx),r=(p.members[pending.owner]||[]).find(x=>x.id===id);
     if(!r){delete pendingDeletes[key];reply(ctx,msg,'角色已不存在。');return;}
-    if(pending.owner!==getPlayerId(ctx)&&Number(ctx.privilegeLevel)<50){reply(ctx,msg,'权限不足。');return;}
+    if(pending.owner!==getPlayerId(ctx)&&!mayManageCamp(ctx)){reply(ctx,msg,'权限不足。');return;}
     deleteRole(ctx,pending.owner,r);delete pendingDeletes[key];
     reply(ctx,msg,'已删除角色：'+r.name+'（'+r.id+'）。');
   }
@@ -558,7 +676,7 @@
 
   // 独立的营地发放入口，避免旧插件占用 .发放 时无法排查。
   function grantCampItem(ctx,msg,args){
-    if(Number(ctx.privilegeLevel)<50){reply(ctx,msg,'只有管理员、群主或骰主可以发放物品。');return;}
+    if(!mayManageCamp(ctx)){reply(ctx,msg,'只有管理员、群主或骰主可以发放物品。');return;}
     const raw=String(msg&&msg.message||'').trim();
     const body=raw.replace(/^[.。，]发放\s*/,'').trim();
     const tokens=body.split(/\s+/).filter(Boolean);
@@ -596,14 +714,14 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【发放 v1.8.4】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放 v1.8.5】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
-    const queue=jsonRead(ctx,'$gH11待发放物品',{});
+    const camp=groupContext(ctx),queue=jsonRead(camp,CAMP_QUEUE,{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
-    jsonWrite(ctx,'$gH11待发放物品',queue);
-    reply(ctx,msg,'🎁【发放 v1.8.4】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    jsonWrite(camp,CAMP_QUEUE,queue);
+    reply(ctx,msg,'🎁【发放 v1.8.5】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
   registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
