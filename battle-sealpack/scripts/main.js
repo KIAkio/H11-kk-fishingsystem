@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.2.3
+// @version 0.2.4
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -22,7 +22,8 @@
     '解析：。战斗 解析 或 。攻击 解析 → 。战斗 自析 或 。战斗 求助',
     '遇袭：。格挡 或 。闪避，尾加「求助」可等待喊话',
     '队友：。喊话 行动码；无人喊话时由当事人或带队发 。结算 行动码',
-    '其他：。战斗 状态 / 。跳过 / 。治疗 角色名或编号；带队可发 。收队',
+    '当前战况：。战斗 或 。战斗 状态；完整指令：。战斗 帮助',
+    '其他：。跳过 / 。治疗 角色名或编号；带队可发 。收队',
     INPUT + '（在小窗可录入当前角色）',
     '查看属性：。战斗 档案 ｜ 装备：。战斗 穿戴 装备名 / 脱下 装备名',
     '独立指令：。投掷 物品名（灵敏检定，成功造成 2 点伤害）',
@@ -30,7 +31,7 @@
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.3');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.4');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -225,38 +226,41 @@
       (target.armor > 0 ? ' ｜ 护甲 ' + target.armor + '/' + target.maxArmor : '');
   }
 
-  function status(room) {
+  function battlePrompt(room) {
+    const pending = room.pending;
+    if (!pending) {
+      return '⚔️【等待进攻】' + playerName(activePlayer(room)) + ' 可以攻击\n。攻击 ｜ 。跳过';
+    }
+    const target = playerName(room.players.find(player => player.uid === pending.target));
+    if (pending.kind === 'defense') {
+      return '🛡️【等待防守】' + room.enemy.name + ' 攻向 ' + target +
+        '\n' + target + ' 请发 。格挡 或 。闪避；尾加「求助」可等待喊话。';
+    }
+    return '📣【等待喊话】' + target + ' 请求协助' + ACTIONS[pending.kind] +
+      '\n队友 。喊话 ' + pending.code + ' ｜ 当事人或带队 。结算 ' + pending.code;
+  }
+
+  function status(room, event = '') {
     if (room.phase === 'lobby') {
-      return '🏕️【小队集结】\n' + (room.players.map(playerName).join('、') || '等待队员加入') +
+      return (event ? event + '\n' : '') + '🏕️【小队集结】\n' +
+        (room.players.map(playerName).join('、') || '等待队员加入') +
         '\n。战斗 加入 [角色编号]';
     }
     const header = { battle: '第 ' + room.round + ' 轮', rest: '整备', defeat: '小队倒下' }[room.phase];
-    const order = room.order.map((key, index) => {
+    const pending = room.pending;
+    const current = room.phase !== 'battle' ? null : pending ? pending.target : room.order[room.turn];
+    const currentMark = !pending ? '⚔️ ' : pending.kind === 'defense' ? '🛡️ ' : '📣 ';
+    const order = room.order.map(key => {
       const target = key === 'enemy' ? room.enemy : room.players.find(player => player.uid === key);
       const name = key === 'enemy' ? target.name : playerName(target);
-      const current = room.phase === 'battle' && (room.pending && room.pending.kind !== 'attack' ?
-        room.pending.target === key : index === room.turn);
-      const mark = current ? '▶ ' : target.hp === 0 ? '× ' : '· ';
+      const mark = current === key ? currentMark : target.hp === 0 ? '× ' : '· ';
       return mark + name + ' ｜ ' + meters(target);
     });
-    let prompt = '';
-    if (room.phase === 'rest') prompt = '可发送「。治疗 角色名或编号」，由带队开启下一场。';
-    if (room.phase === 'battle') {
-      if (!room.pending) prompt = '轮到 ' + playerName(activePlayer(room)) + ' ｜ 。攻击 / 。跳过';
-      else {
-        const pending = room.pending;
-        if (pending.kind === 'defense') {
-          prompt = '⚠️ ' + room.enemy.name + ' 攻向 ' + playerName(room.players.find(p => p.uid === pending.target)) +
-            '\n。格挡 或 。闪避；尾加「求助」可等待喊话。';
-        } else {
-          const target = room.players.find(player => player.uid === pending.target);
-          prompt = '📣 ' + playerName(target) + (pending.kind === 'attack' ? ' 攻击 ' + room.enemy.name + '，请求要害解析' :
-            ' 选择' + ACTIONS[pending.kind] + '，请求队友喊话') +
-            '\n。喊话 ' + pending.code + ' ｜ 。结算 ' + pending.code;
-        }
-      }
-    }
-    return ['❄️【' + header + '】'].concat(order, prompt ? [prompt] : []).join('\n');
+    const lines = ['❄️【' + header + '】'];
+    if (room.phase === 'battle') lines.push(battlePrompt(room));
+    if (event) lines.push(event);
+    if (room.phase === 'rest') lines.push('可发送「。治疗 角色名或编号」，由带队开启下一场。');
+    return lines.concat(order).join('\n');
   }
 
   function roll() {
@@ -376,7 +380,7 @@
   const actions = ['攻击', '解析', '自析', '求助', '格挡', '闪避', '喊话', '结算', '跳过', '投掷'];
 
   function run(ctx, msg, commandName, words) {
-    const cmd = words.shift() || '帮助';
+    const cmd = words.shift();
     const inGroup = msg.messageType === 'group';
     const id = uid(ctx);
     const group = groupId(ctx);
@@ -398,6 +402,7 @@
     const joined = Object.keys(data.rooms).find(roomKey => roomKey.startsWith(prefix) &&
       data.rooms[roomKey].players.some(player => player.uid === id));
     let room = inGroup ? data.rooms[key] : joined ? data.rooms[joined] : null;
+    if (!cmd) return { text: room ? status(room) : HELP };
     if (cmd === '开队') {
       check(inGroup && ctx.privilegeLevel >= 50, '请由队群管理员、群主或骰主开队。');
       check(!room, '本群已有小队，请先「。收队」。');
@@ -504,7 +509,7 @@
           advance(room, true);
         }
       } else {
-        check(mine, '现在轮到 ' + playerName(current) + '。');
+        if (!mine) return { text: battlePrompt(room) };
         if (cmd === '格挡' || cmd === '闪避') {
           check(pending && pending.kind === 'defense', '受到攻击时才可选择格挡或闪避。');
           check(!words.length || (words.length === 1 && words[0] === '求助'), '可在指令尾加「求助」等待喊话。');
@@ -512,7 +517,7 @@
           if (words.length) queueAction(data, room, kind, current);
           else event = settle(room, kind, current, null, false);
         } else {
-          check(!pending, '当前正在等待防守或喊话结算。');
+          if (pending) return { text: battlePrompt(room) };
           if (cmd === '投掷') {
             const item = words.join(' ').trim();
             check(item && item.length <= 64 && !/[\[\]\r\n]/.test(item), '格式：。投掷 物品名（最多 64 字）');
@@ -523,7 +528,7 @@
               ' ｜ 灵敏 ' + dice + '/' + agility + ' ｜ ' +
               (success ? '命中 ' + room.enemy.name + '，' + damage(room.enemy, 2) : '投掷失败');
             advance(room, true);
-            return { data, room, text: event + '\n' + status(room) };
+            return { data, room, text: status(room, event) };
           }
           let mode = cmd;
           if (cmd === '攻击') {
@@ -538,7 +543,7 @@
         }
       }
     }
-    return { data, room, text: (event ? event + '\n' : '') + status(room) };
+    return { data, room, text: status(room, event) };
   }
 
   function execute(ctx, msg, commandName, words) {
