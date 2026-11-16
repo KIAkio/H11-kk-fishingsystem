@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.2.4
+// @version 0.2.5
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -31,7 +31,7 @@
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.4');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.2.5');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -233,8 +233,7 @@
     }
     const target = playerName(room.players.find(player => player.uid === pending.target));
     if (pending.kind === 'defense') {
-      return '🛡️【等待防守】' + room.enemy.name + ' 攻向 ' + target +
-        '\n' + target + ' 请发 。格挡 或 。闪避；尾加「求助」可等待喊话。';
+      return room.enemy.name + '向' + target + '发起了攻击\n。闪避 ｜ 。格挡';
     }
     return '📣【等待喊话】' + target + ' 请求协助' + ACTIONS[pending.kind] +
       '\n队友 。喊话 ' + pending.code + ' ｜ 当事人或带队 。结算 ' + pending.code;
