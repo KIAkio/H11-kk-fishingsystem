@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.12
+// @version 1.1.13
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.12',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.13',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。']];
@@ -28,39 +28,10 @@ function bj(d){return new Date(d.getTime()+8*60*60*1000)}
 function day(d){const x=bj(d);return x.getUTCFullYear()+'-'+String(x.getUTCMonth()+1).padStart(2,'0')+'-'+String(x.getUTCDate()).padStart(2,'0')}
 function hour(d){return bj(d).getUTCHours()}
 function boundary(y,m,d,h){return Date.UTC(y,m-1,d,h-8)}
-function bag(c){const d=read(c,BAG,{version:3,hp:10,maxHp:10,items:{}});if(!d.items)d.items={};for(const k of ['fish','mushroom','berry','supplies','equipment','other'])if(!d.items[k])d.items[k]={};if(!Number.isFinite(+d.hp))d.hp=10;if(!Number.isFinite(+d.maxHp))d.maxHp=10;if(!Number.isFinite(+d.hunger))d.hunger=4;if(!Number.isFinite(+d.hungerUpdatedAt))d.hungerUpdatedAt=Date.now();return d}
 function save(c,d){d.version=3;write(c,BAG,d)}
-function sync(c){
-const d=bag(c),now=Date.now(),start=Math.min(now,Number(d.hungerUpdatedAt)||now);
-const startBj=bj(new Date(start)),y=startBj.getUTCFullYear(),m=startBj.getUTCMonth(),dd=startBj.getUTCDate();
-const days=Math.min(370,Math.max(0,Math.ceil((now-start)/86400000)+2));
-for(let i=0;i<=days;i++){
- const dt=new Date(Date.UTC(y,m,dd+i));
- for(const h of [5,10,15,20]){
-  const t=boundary(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate(),h);
-  if(t>start&&t<=now)if(Number(d.hunger)<=0){
-   d.hunger=0;
-   d.hp=Math.max(0,Number(d.hp)-1);
-  }else{
-   d.hunger=h===5?1:Math.max(0,Number(d.hunger)-1);
-  }
- }
-}
-d.hungerUpdatedAt=now;
-for(const [n,it] of Object.entries(d.items.other)){
- if(!it||!it.campBreakfast)continue;
- const count=Math.max(0,Number(it.count)||0);
- let batches=Array.isArray(it.breakfastBatches)?it.breakfastBatches.filter(b=>b&&Number(b.count)>0):[{count,expiresAt:Number(it.expiresAt)||0}];
- // 背包中食用或共享可能已减少总数：从最早到期的批次扣除差额。
- batches.sort((a,b)=>(Number(a.expiresAt)||0)-(Number(b.expiresAt)||0));
- let excess=batches.reduce((sum,b)=>sum+Number(b.count),0)-count;
- for(const b of batches){if(excess<=0)break;const take=Math.min(excess,Number(b.count));b.count-=take;excess-=take}
- batches=batches.filter(b=>Number(b.count)>0&&(!Number(b.expiresAt)||Number(b.expiresAt)>now));
- it.count=batches.reduce((sum,b)=>sum+Number(b.count),0);
- if(it.count<=0)delete d.items.other[n];
- else {it.breakfastBatches=batches;it.expiresAt=Math.min(...batches.map(b=>Number(b.expiresAt)||Infinity))}
-}
-save(c,d);return d
+function sync(c,announce){
+ if(!globalThis.H11CampLife)throw Error('请先启用地精背包核心 1.8.6 或更新版本。');
+ return globalThis.H11CampLife.sync(c,announce);
 }
 function nextEight(){const x=bj(new Date());return boundary(x.getUTCFullYear(),x.getUTCMonth()+1,x.getUTCDate()+1,8)}
 function find(d,n){const names=[n,n.startsWith('营地早餐：')?n:'营地早餐：'+n];for(const name of names)for(const k of Object.keys(d.items)){if(d.items[k][name]&&+d.items[k][name].count>0)return {k,it:d.items[k][name],name}}return null}
@@ -82,7 +53,7 @@ else greeting='希望'+pname(c)+'已经去领过午饭了…';
 const r=read(c,ATT,{lastDate:'',count:0}),today=day(now);if(r.lastDate===today){reply(c,m,repeatHeader+r.count);return}
 r.lastDate=today;r.count=(+r.count||0)+1;write(c,ATT,r);
 const rank=read(c,RANK,{members:{}});rank.members[uid(c)+'::'+role(c)]={name:pname(c),count:r.count};write(c,RANK,rank);
-const d=sync(c),a=MENU[Math.floor(Math.random()*MENU.length)],twice=Math.random()<.1,b=twice?MENU[Math.floor(Math.random()*MENU.length)]:null;
+const d=sync(c,text=>reply(c,m,text)),a=MENU[Math.floor(Math.random()*MENU.length)],twice=Math.random()<.1,b=twice?MENU[Math.floor(Math.random()*MENU.length)]:null;
 function add(x){
  const n='营地早餐：'+x[0],v=d.items.other[n]||{count:0};
  const oldCount=Math.max(0,Number(v.count)||0);
@@ -98,7 +69,7 @@ let out='今日已打卡。'+greeting+'\n🎫累计数：'+r.count+'\n\n营地�
 });
 cmd('点名信息','查看点名记录：.点名信息',(c,m)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const r=read(c,ATT,{lastDate:'',count:0});reply(c,m,'🏕️【点名记录】\n累计数：'+r.count+'\n最近打卡：'+(r.lastDate||'暂无记录'))});
 cmd('点名排行','查看本群点名排行：.点名排行',(c,m)=>{const r=read(c,RANK,{members:{}}),a=Object.values(r.members).sort((x,y)=>y.count-x.count).slice(0,10);reply(c,m,'🏅【累计点名排行】\n'+(a.length?a.map((x,i)=>(i+1)+'. '+x.name+'：'+x.count+' 次').join('\n'):'暂无记录'))});
-cmd('饱腹','查看饱腹值：.饱腹',(c,m)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const d=sync(c);reply(c,m,(d.hunger===0?'【饥饿】\n':'')+'饱腹值：'+d.hunger+' / 4')});
+cmd('饱腹','查看饱腹值：.饱腹',(c,m)=>{if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}const d=sync(c,text=>reply(c,m,text));reply(c,m,(d.hunger===0?'【饥饿】\n':'')+'饱腹值：'+d.hunger+' / 4')});
 cmd('营地菜单','查看营地早餐菜单：.营地菜单',(c,m)=>reply(c,m,'🥣【营地早餐菜单】\n'+MENU.map(x=>'• '+x[0]+'：'+x[1]).join('\n')));
 cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2—4人，可省略早餐前缀）',(c,m,a)=>{
  if(!ok(c)){reply(c,m,'尚未查询到档案，路过？');return}
@@ -137,7 +108,10 @@ cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2�
    if(!ok(participant.ctx)){reply(c,m,'被@的同学「'+participant.name+'」尚未在当前营地注册，无法共享。');return}
  }
  const states=[];
- for(const p of participants)states.push({participant:p,data:sync(p.ctx)});
+ for(const p of participants)states.push({participant:p,data:sync(p.ctx,text=>reply(c,m,text))});
+ const dead=states.find(entry=>entry.data.dead);
+ if(dead){reply(c,m,dead.participant.name+'已结束旅程，复活后才能共享食物。');return}
+
  const owner=states[0].data,found=find(owner,foodName);
  if(!found){reply(c,m,'你的背包里没有「'+foodName+'」。');return}
  if(!found.it.campBreakfast&&!Number.isFinite(Number(found.it.hungerRestore))){reply(c,m,'「'+foodName+'」尚未设置食用效果，不能分享食用。');return}

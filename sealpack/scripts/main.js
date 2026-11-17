@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.5
+// @version      1.8.6
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,9 +10,21 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.5';
+  const VERSION = '1.8.6';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
+  const FALL_LIMIT = 3;
+  const HUNGER_LINES = [
+    '人是铁饭是钢，铁人同志xx由于长期未进食而倒下了……“要记得吃饭啊…”',
+    'xx用身体践行了：不吃饭，真的是会死的……RIP.',
+    '“好饿…\n就像，会吞噬一切的黑洞\n像，饿了三周的美洲豹\n或，沙漠里奔波了仨月驼峰瘫瘪的骆驼”，xx在死前的写下了这样一篇短诗',
+    '“饿死的人，不是一下子就饿死的，而是一点点饿死的。先是面黄，再是乏力，最后浮肿，脚上一按一个坑。一个不好的天气，人就没了。”，而xx，就这样突然地倒下了。',
+    '“我从早上起来就没有吃过东西 我现在就像地狱犬看见了人类 好饿好饿 我饿的头晕目眩 饿的十年生死两茫茫 饿的地崩山摧壮士死然后天梯石栈相钩连 等你的时间里 我期待 我向往我像卖火柴的小女孩一样幻想现在时间一分一秒的流逝就像我的生命一样 希望在我临死之前能够吃上一口饭。”这是xx在死前的最后一句话。'
+  ];
+  const JOURNEY_LINES = [
+    '“死亡是一枚沉重而干净的果实，我们吃下去，医治太多活着的病症。”',
+    '“你明白，路很远，我不能带着这副身躯走，它太重了。”'
+  ];
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
   const ROLE_STORE = '$mH11角色数据仓库';
   const ROLE_ACTIVE = '$mH11当前角色索引';
@@ -94,6 +106,8 @@
       hp: DEFAULT_HP,
       maxHp: DEFAULT_HP,
       hunger: 4,
+      falls: 0,
+      dead: false,
       hungerUpdatedAt: Date.now(),
       items: {
         fish: {},
@@ -120,6 +134,10 @@
       ? Math.max(1, Math.min(999, maxHp))
       : DEFAULT_HP;
 
+    base.hp = Math.min(base.hp, base.maxHp);
+    base.falls = Math.max(0, Math.min(FALL_LIMIT, Math.floor(Number(data.falls) || 0)));
+    base.dead = data.dead === true || base.falls >= FALL_LIMIT;
+    if (base.dead) base.hp = 0;
     base.version = 3;
     base.hunger = Number.isFinite(Number(data.hunger)) ? Math.max(0, Math.min(4, Number(data.hunger))) : 4;
     base.hungerUpdatedAt = Number.isFinite(Number(data.hungerUpdatedAt)) ? Number(data.hungerUpdatedAt) : Date.now();
@@ -135,14 +153,47 @@
     return base;
   }
 
-  function applyLifeTicks(data) {
+  function chooseLine(lines) {
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+
+  function changeHp(data, amount, name, cause = 'fatigue', trapName = '') {
+    if (data.dead) return '';
+    const before = data.hp;
+    data.hp = Math.max(0, Math.min(data.maxHp, before + amount));
+    if (before <= 0 || data.hp !== 0) return '';
+
+    data.falls++;
+    data.dead = data.falls >= FALL_LIMIT;
+    let lines;
+    if (cause === 'hunger') {
+      let flavor = chooseLine(HUNGER_LINES);
+      if (!data.dead) {
+        flavor = flavor.replace('真的是会死的……RIP.', '真的会倒下……')
+          .replace('在死前的写下', '在倒下前写下')
+          .replace('在死前的最后一句话', '在倒下前说的话');
+      }
+      lines = [name + '因为饥饿而倒下了。', flavor.replace(/xx/g, () => name)];
+    } else if (cause === 'trap') {
+      lines = [name + '因落入' + trapName + '而耗尽了体力。'];
+    } else if (cause === 'drain') {
+      lines = [name + '被无形之物抽成了老鼠干，' + name + '倒下了。'];
+    } else {
+      lines = [name + '因为体力耗尽而倒下了。'];
+    }
+    if (data.dead) lines.push(chooseLine(JOURNEY_LINES), name + '结束了这次旅程。');
+    return lines.join('\n');
+  }
+
+  function applyLifeTicks(data, name) {
+    let notice = '';
     const now = Date.now();
     if (!Number.isFinite(Number(data.hunger))) data.hunger = 4;
     if (!Number.isFinite(Number(data.hungerUpdatedAt))) data.hungerUpdatedAt = now;
     const start = Number(data.hungerUpdatedAt);
     if (start > now) {
       data.hungerUpdatedAt = now;
-      return data;
+      return notice;
     }
     // 北京时间固定 UTC+8，兼容不提供 Intl 的 SealDice JS 沙箱。
     const beijingStart = new Date(start + 8 * 60 * 60 * 1000);
@@ -156,7 +207,7 @@
         if (timestamp > start && timestamp <= now) {
           if (Number(data.hunger) <= 0) {
             data.hunger = 0;
-            data.hp = Math.max(0, Number(data.hp) - 1);
+            notice = changeHp(data, -1, name, 'hunger') || notice;
           } else {
             data.hunger = hour === 5 ? 1 : Math.max(0, Number(data.hunger) - 1);
           }
@@ -166,11 +217,29 @@
     data.hunger = Math.max(0, Math.min(4, Number(data.hunger)));
     data.hungerUpdatedAt = now;
     for (const [name, item] of Object.entries(data.items.other || {})) {
-      if (item && item.campBreakfast && Number(item.expiresAt) > 0 && Number(item.expiresAt) <= now) {
-        delete data.items.other[name];
+      if (!item || !item.campBreakfast) continue;
+      const count = Math.max(0, Number(item.count) || 0);
+      let batches = Array.isArray(item.breakfastBatches)
+        ? item.breakfastBatches.filter(batch => batch && Number(batch.count) > 0)
+        : [{ count, expiresAt: Number(item.expiresAt) || 0 }];
+      batches.sort((a, b) => (Number(a.expiresAt) || 0) - (Number(b.expiresAt) || 0));
+      let excess = batches.reduce((sum, batch) => sum + Number(batch.count), 0) - count;
+      for (const batch of batches) {
+        if (excess <= 0) break;
+        const used = Math.min(excess, Number(batch.count));
+        batch.count -= used;
+        excess -= used;
+      }
+      batches = batches.filter(batch => Number(batch.count) > 0 &&
+        (!Number(batch.expiresAt) || Number(batch.expiresAt) > now));
+      item.count = batches.reduce((sum, batch) => sum + Number(batch.count), 0);
+      if (!item.count) delete data.items.other[name];
+      else {
+        item.breakfastBatches = batches;
+        item.expiresAt = Math.min(...batches.map(batch => Number(batch.expiresAt) || Infinity));
       }
     }
-    return data;
+    return notice;
   }
 
   function getPlayerId(ctx) {
@@ -304,8 +373,8 @@
 
   globalThis.H11CampProfiles = { context: groupContext, groupKey, read: loadGroupProfiles };
 
-  function loadData(ctx) {
-    const role=currentRole(ctx);
+  let announceFromCommand;
+  function loadData(ctx, role = currentRole(ctx), announce = announceFromCommand, tick = true) {
     if (!role) throw new Error('请先使用 .注册 姓名 创建营地角色。');
     const store=jsonRead(ctx,ROLE_STORE,{});
     const key=roleKey(ctx,role.id);
@@ -313,7 +382,7 @@
       const legacy=jsonRead(ctx,DATA_VAR,null);
       const migration=jsonRead(ctx,'$mH11旧存档迁移标记',{});
       // 旧个人背包仅分配给首次访问的角色，避免复制给每个新角色。
-      if (legacy && !migration.done) {
+      if (legacy && !migration.done && currentRole(ctx)?.id === role.id) {
         store[key]=legacy;
         migration.done=true;
         migration.destination=key;
@@ -321,26 +390,51 @@
       } else store[key]=createDefaultData();
       jsonWrite(ctx,ROLE_STORE,store);
     }
-    const data=applyLifeTicks(normalizeData(store[key]));
+    const data = normalizeData(store[key]);
+    if (!tick) return data;
+    const notice = applyLifeTicks(data, role.name);
     const camp=groupContext(ctx),queue=jsonRead(camp,CAMP_QUEUE,{});
     const queueKey=getPlayerId(ctx)+'::'+String(role.id).padStart(3,'0');
     const pending=Array.isArray(queue[queueKey])?queue[queueKey]:[];
-    if(pending.length){
-      for(const entry of pending)addItem(data,entry.category,entry.itemName,entry.amount,'');
-      store[key]=normalizeData(data);
-      jsonWrite(ctx,ROLE_STORE,store);
+    for(const entry of pending)addItem(data,entry.category,entry.itemName,entry.amount,'');
+    saveData(ctx, data, role);
+    if (pending.length) {
       delete queue[queueKey];
       jsonWrite(camp,CAMP_QUEUE,queue);
     }
+    if (notice && announce) announce(notice);
     return data;
   }
-  function saveData(ctx,data) {
-    const role=currentRole(ctx);
+  function saveData(ctx, data, role = currentRole(ctx)) {
     if (!role) throw new Error('请先注册角色。');
     const store=jsonRead(ctx,ROLE_STORE,{});
     store[roleKey(ctx,role.id)]=normalizeData(data);
     jsonWrite(ctx,ROLE_STORE,store);
   }
+  globalThis.H11CampLife = {
+    sync(ctx, announce) {
+      return loadData(ctx, currentRole(ctx), announce);
+    },
+    read(ctx, role) {
+      return loadData(ctx, role, null, false);
+    },
+    changeHp(ctx, role, amount, cause, trapName) {
+      const data = loadData(ctx, role, null, false);
+      const before = data.hp;
+      const notice = changeHp(data, amount, role.name, cause, trapName);
+      saveData(ctx, data, role);
+      return { data, change: data.hp - before, notice };
+    },
+    restoreFalls(ctx, role, count) {
+      const data = loadData(ctx, role, null, false);
+      if (data.dead || !Number.isSafeInteger(count) || count < 1) return 0;
+      const restored = Math.min(count, data.falls);
+      data.falls -= restored;
+      saveData(ctx, data, role);
+      return restored;
+    }
+  };
+
   function getOrCreateGroupProfile(ctx, registeredName) {
     const uid=getPlayerId(ctx);
     if(!uid)throw new Error('无法读取你的平台用户 ID。');
@@ -439,11 +533,15 @@
     cmd.name = name;
     cmd.help = help;
     cmd.solve = (ctx, msg, cmdArgs) => {
+      const previous = announceFromCommand;
+      announceFromCommand = text => reply(ctx, msg, text);
       try {
         handler(ctx, msg, cmdArgs);
       } catch (e) {
         console.log('[地精背包] 指令异常：' + e);
         reply(ctx, msg, '背包系统发生错误：' + String(e.message || e));
+      } finally {
+        announceFromCommand = previous;
       }
       return seal.ext.newCmdExecuteResult(true);
     };
@@ -480,7 +578,8 @@
     '.删除000 / .删除 000 / .删除 姓名 — 删除角色（需确认）',
     '.确认删除000 / .确认删除 000 — 确认删除',
     '.背包 [鱼类/蘑菇/浆果/日用品/训练装备/其他] — 查看背包',
-    '.状态 — 查看 HP 与饱腹值',
+    '.状态 — 查看 HP、饱腹与倒下次数',
+    '.死刑 / .复活 / .汲取 角色名、编号或 @玩家 — 营地管理员指令',
     '.食用 食物名 — 食用背包物品',
     '.丢弃 物品名 [数量/全部] — 丢弃物品',
     '.重置所有背包 确认 — 清空个人背包并恢复 HP',
@@ -512,6 +611,14 @@
   ext.onNotCommandReceived = (ctx,msg)=>{
     const input=String(msg&&msg.message||'').trim();
     if(/^[。，]指令H11\\s*$/i.test(input))reply(ctx,msg,H11_HELP);
+    const match = /^(?:[。，](死刑|复活|汲取)\s*|复活\s+)(?=\S)/.exec(input);
+    if (match) {
+      try {
+        manageLife(ctx, msg, match[1] || '复活');
+      } catch (e) {
+        reply(ctx, msg, String(e.message || e));
+      }
+    }
   };
 
   registerCommand('注册', '建立档案：.注册 姓名', (ctx, msg, args) => {
@@ -714,16 +821,79 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【发放 v1.8.5】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放 v1.8.6】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const camp=groupContext(ctx),queue=jsonRead(camp,CAMP_QUEUE,{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(camp,CAMP_QUEUE,queue);
-    reply(ctx,msg,'🎁【发放 v1.8.5】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    reply(ctx,msg,'🎁【发放 v1.8.6】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
   registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
+
+  function lifeTarget(ctx, msg, command) {
+    if (!mayManageCamp(ctx)) throw Error('只有营地管理员、主群群主或骰主可以使用该指令。');
+    const input = String(msg.message || '').replace(new RegExp('^\\s*[.。，]?' + command + '\\s*'), '').trim();
+    const profiles = loadGroupProfiles(ctx);
+    const mention = /^\[CQ:at,qq=(\d+)\]$/.exec(input);
+    if (mention) {
+      const owner = 'QQ:' + mention[1];
+      const role = (profiles.members[owner] || []).find(entry => entry.id === profiles.active[owner]);
+      if (!role) throw Error('被@的玩家没有当前营地角色。');
+      return { owner, role };
+    }
+    if (!input || input.startsWith('@') || input.includes('[CQ:at,')) {
+      throw Error('格式：。' + command + ' 角色名 / 编号 / @玩家（只选一个目标）');
+    }
+    const matches = [];
+    for (const [owner, roles] of Object.entries(profiles.members)) {
+      for (const role of roles) {
+        if (/^\d+$/.test(input) ? role.id === input.padStart(3, '0') : role.name === input) {
+          matches.push({ owner, role });
+        }
+      }
+    }
+    if (!matches.length) throw Error('未找到该角色。');
+    if (matches.length > 1) throw Error('存在同名或同编号角色，请核对：' +
+      matches.map(entry => entry.role.name + ' ' + entry.role.id).join('、') + '。');
+    return matches[0];
+  }
+
+  function manageLife(ctx, msg, command) {
+    const { owner, role } = lifeTarget(ctx, msg, command);
+    const target = owner === getPlayerId(ctx) ? ctx : temporaryContext(ctx, owner, sourceGroupKey(ctx) === 'private' ? '' : sourceGroupKey(ctx));
+    const data = loadData(target, role, null, false);
+    let notice;
+    if (command === '复活') {
+      if (data.hp > 0) throw Error(role.name + '仍可行动。');
+      const wasDead = data.dead;
+      if (wasDead) data.falls = 0;
+      data.dead = false;
+      data.hp = data.maxHp;
+      data.hunger = 1;
+      data.hungerUpdatedAt = Date.now();
+      notice = wasDead ? role.name + '重生了，这一世' + role.name + '要夺回属于' + role.name + '的一切'
+        : '一个' + role.name + '倒下了，千千万万个' + role.name + '站起来了。';
+    } else {
+      if (data.dead) throw Error(role.name + '已结束旅程。');
+      if (command === '死刑') {
+        data.hp = 0;
+        data.dead = true;
+        notice = '你被无形的手处死了。';
+      } else {
+        if (data.hp === 0) throw Error(role.name + '已经倒下了。');
+        notice = changeHp(data, -data.hp, role.name, 'drain');
+      }
+    }
+    saveData(target, data, role);
+    reply(ctx, msg, notice);
+  }
+
+  for (const command of ['死刑', '复活', '汲取']) {
+    registerCommand(command, '管理员指令：。' + command + ' 角色名 / 编号 / @玩家',
+      (ctx, msg) => manageLife(ctx, msg, command));
+  }
 
   registerCommand('重置所有背包', '重置自己的全部背包物品与 HP：.重置所有背包 确认', (ctx, msg, args) => {
     const confirm = String(args.getArgN(1) || '').trim();
@@ -731,9 +901,12 @@
       reply(ctx, msg, '⚠️ 此操作会清空你在所有群共享的背包物品，并将 HP 恢复为 10。\n如确定重置，请输入：.重置所有背包 确认');
       return;
     }
+    const data = loadData(ctx);
     const fresh = createDefaultData();
-    saveData(ctx, fresh);
-    reply(ctx, msg, '🧹 已重置你的全部背包：物品已清空，HP 已恢复为 10 / 10。\n档案编号不会改变。');
+    data.items = fresh.items;
+    data.hp = data.dead ? 0 : data.maxHp;
+    saveData(ctx, data);
+    reply(ctx, msg, '🧹 已重置你的全部背包：物品已清空，当前 HP：' + data.hp + ' / ' + data.maxHp + '。\n档案编号不会改变。');
   });
 
   registerCommand('状态', '查看生命值与饱腹值：.状态', (ctx, msg) => {
@@ -744,7 +917,9 @@
     reply(ctx, msg, '【' + getRegisteredName(ctx) + '的状态】\n' + hearts +
       '\n生命值：' + data.hp + ' / ' + data.maxHp +
       (Number(data.hunger) === 0 ? '\n【饥饿】' : '') +
-      '\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4');
+      '\n饱腹值：' + (Number(data.hunger) || 0) + ' / 4' +
+      '\n倒下次数：' + data.falls + ' / ' + FALL_LIMIT +
+      (data.dead ? '\n【死亡】' : data.hp === 0 ? '\n【倒下】' : ''));
   });
 
   // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
@@ -756,6 +931,10 @@
       return;
     }
     const data = loadData(ctx);
+    if (data.dead) {
+      reply(ctx, msg, '该角色已结束旅程，须由营地管理员复活。');
+      return;
+    }
     const candidates = requested.startsWith('营地早餐：')
       ? [requested]
       : [requested, '营地早餐：' + requested];
@@ -786,8 +965,9 @@
     const oldHp = data.hp;
     const oldHunger = Number(data.hunger) || 0;
     removeItem(data, foundCategory, foundName, 1);
+    let notice = '';
     if (effect) {
-      data.hp = Math.max(0, Math.min(data.maxHp, data.hp + Number(effect.hp || 0)));
+      notice = changeHp(data, Number(effect.hp || 0), getRegisteredName(ctx));
     } else {
       data.hp = Math.max(0, Math.min(data.maxHp, data.hp + (Number(item.hpRestore) || 1)));
       data.hunger = Math.min(4, Math.max(0, oldHunger + (Number(item.hungerRestore) || (isBreakfast ? 3 : 0))));
@@ -795,7 +975,7 @@
     saveData(ctx, data);
     if (effect) {
       reply(ctx, msg, '☠️ 你食用了「' + foundName + '」。\n' + effect.description +
-        '\nHP：' + oldHp + ' → ' + data.hp + ' / ' + data.maxHp);
+        '\nHP：' + oldHp + ' → ' + data.hp + ' / ' + data.maxHp + (notice ? '\n' + notice : ''));
     } else {
       reply(ctx, msg, '🍽️ 你食用了「' + foundName + '」。\n❤️ HP：' + oldHp +
         ' → ' + data.hp + ' / ' + data.maxHp + '\n饱腹值：' + oldHunger +

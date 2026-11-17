@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 圣布里吉冬训营战斗系统
 // @author KIAkio
-// @version 0.3.0
+// @version 0.3.1
 // @description QQ 小队群回合制战斗，支持私聊提交行动
 // ==/UserScript==
 (function () {
@@ -34,7 +34,7 @@
   ].join('\n');
 
   if (seal.ext.find(EXT)) return;
-  const ext = seal.ext.new(EXT, 'KIAkio', '0.3.0');
+  const ext = seal.ext.new(EXT, 'KIAkio', '0.3.1');
 
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -102,9 +102,7 @@
     const profile = (registry.members[id] || []).find(entry => entry.id === wanted);
     check(profile, '未找到你名下的该营地角色。请先注册或核对编号。');
     const roleKey = profiles.groupKey(ctx) + '::' + profile.id;
-    const result = seal.vars.strGet(ctx, '$mH11角色数据仓库');
-    const store = result[0] ? JSON.parse(result[0]) : {};
-    return { profile, key: id + '::' + roleKey, bag: store[roleKey] || {} };
+    return { profile, key: id + '::' + roleKey, bag: life().read(ctx, profile) };
   }
 
   function record(data, identity) {
@@ -194,7 +192,12 @@
     };
   }
 
-  function refreshPlayer(data, ctx, room, player) {
+  function life() {
+    check(globalThis.H11CampLife, '请先启用地精背包核心 1.8.6 或更新版本。');
+    return globalThis.H11CampLife;
+  }
+
+  function playerContext(ctx, room, player) {
     const msg = seal.newMessage();
     msg.messageType = 'group';
     msg.platform = ctx.endPoint.platform;
@@ -202,7 +205,15 @@
     msg.sender.userId = player.uid;
     const target = seal.createTempCtx(ctx.endPoint, msg);
     check(target && groupId(target) === room.groupId && uid(target) === player.uid, '无法读取队员 ' + player.id + ' 的档案。');
-    const identity = character(target, player.id);
+    return target;
+  }
+
+  function refreshPlayer(data, ctx, room, player, updateEquipment = false) {
+    const identity = character(playerContext(ctx, room, player), player.id);
+    player.hp = identity.bag.hp;
+    player.maxHp = identity.bag.maxHp;
+    player.dead = identity.bag.dead;
+    if (!updateEquipment) return;
     const saved = data.characters[identity.key];
     if (saved) {
       player.stats = Object.assign({}, saved.stats, { calls: player.stats.calls, cooldown: player.stats.cooldown });
@@ -299,6 +310,22 @@
     return '护甲 -' + armor + '，HP -' + hp;
   }
 
+  function changePlayerHp(ctx, room, player, amount, cause, trapName) {
+    const target = playerContext(ctx, room, player);
+    const profile = { id: player.id, name: player.name };
+    const result = life().changeHp(target, profile, amount, cause, trapName);
+    player.hp = result.data.hp;
+    player.dead = result.data.dead;
+    return result;
+  }
+
+  function damagePlayer(ctx, room, player, amount, trapName) {
+    const armor = Math.min(player.armor, amount);
+    const result = changePlayerHp(ctx, room, player, -(amount - armor), trapName ? 'trap' : 'fatigue', trapName);
+    player.armor -= armor;
+    return '护甲 -' + armor + '，HP -' + Math.abs(result.change) + (result.notice ? '\n' + result.notice : '');
+  }
+
   function advance(room, increment) {
     room.pending = null;
     if (room.enemy.hp <= 0) {
@@ -345,7 +372,7 @@
     return '普通成功';
   }
 
-  function settle(room, kind, player, helper, selfAnalysis) {
+  function settle(ctx, room, kind, player, helper, selfAnalysis) {
     let bonus = 0;
     const lines = [];
     if (helper || selfAnalysis) {
@@ -376,8 +403,9 @@
         return '';
       }
       if (grade === '大失败') {
-        player.hp = Math.max(0, player.hp - 1);
+        const result = changePlayerHp(ctx, room, player, -1, 'fatigue');
         lines.push('未命中，' + playerName(player) + ' 自伤 1 HP。');
+        if (result.notice) lines.push(result.notice);
       } else if (grade === '失败') {
         lines.push('未命中。');
       } else {
@@ -398,7 +426,7 @@
       const dice = roll();
       lines.push(playerName(player) + ' ' + ACTIONS[kind] + detail + ' ｜ ' + enemy.name +
         ' 命中 ' + dice + '/' + threshold + ' ｜ ' +
-        (dice <= threshold ? damage(player, strikeDamage(enemy, stats, reduction)) : '未命中'));
+        (dice <= threshold ? damagePlayer(ctx, room, player, strikeDamage(enemy, stats, reduction)) : '未命中'));
     }
     advance(room, true);
     return lines.join('\n');
@@ -446,7 +474,7 @@
   }
 
   function beginEncounter(data, ctx, room, enemy) {
-    for (const member of room.players) refreshPlayer(data, ctx, room, member);
+    for (const member of room.players) refreshPlayer(data, ctx, room, member, true);
     if (room.exploration) {
       room.exploration.safe = false;
       delete room.exploration.trap;
@@ -484,7 +512,7 @@
       const avoided = dice <= player.stats.agility;
       let event = '灵敏检定：D100=' + dice + '/' + player.stats.agility + '\n' +
         playerName(player) + (avoided ? trap.avoid : trap.fail);
-      if (!avoided && trap.damage) event += '\n' + damage(player, trap.damage);
+      if (!avoided && trap.damage) event += '\n' + damagePlayer(ctx, room, player, trap.damage, trap.name);
       if (!room.players.some(member => member.hp > 0)) {
         room.phase = 'defeat';
       } else if (trap.enemy && (!avoided || trap.alwaysBattle)) {
@@ -554,6 +582,13 @@
     const joined = Object.keys(data.rooms).find(roomKey => roomKey.startsWith(prefix) &&
       data.rooms[roomKey].players.some(player => player.uid === id));
     let room = inGroup ? data.rooms[key] : joined ? data.rooms[joined] : null;
+    if (room && cmd !== '收队' && cmd !== '移除') {
+      for (const member of room.players) refreshPlayer(data, ctx, room, member);
+      if (room.phase === 'battle') {
+        const acting = room.pending ? room.players.find(member => member.uid === room.pending.target) : activePlayer(room);
+        if (acting && acting.hp === 0) advance(room, !room.pending || room.pending.kind !== 'defense');
+      }
+    }
     if (!cmd) return { text: room ? status(room) : HELP };
     if (cmd === '开队') {
       check(inGroup && ctx.privilegeLevel >= 50, '请由队群管理员、群主或骰主开队。');
@@ -628,9 +663,9 @@
       check(matches.length > 0, '本队没有这个角色，请核对名字或编号。');
       check(matches.length === 1, '本队有同名角色，请用编号：' + matches.map(playerName).join('、') + '。');
       const target = matches[0];
+      check(!target.dead, playerName(target) + ' 已结束旅程，须由营地管理员复活。');
       check(target.hp < target.maxHp, playerName(target) + ' 的 HP 已满。');
-      const healed = Math.min(3, target.maxHp - target.hp);
-      target.hp += healed;
+      const healed = changePlayerHp(ctx, room, target, 3).change;
       player.healUsed = true;
       event = playerName(player) + ' 为 ' + playerName(target) + ' 恢复 ' + healed + ' HP。';
     } else {
@@ -663,16 +698,16 @@
             player.spentCalls = 0;
             player.nextCall = room.round + player.stats.cooldown + 1;
           }
-          event = settle(room, pending.kind, current, player, false);
+          event = settle(ctx, room, pending.kind, current, player, false);
         } else {
           check(mine || (inGroup && isLeader), '只有当事人或队群带队可以结束等待。');
-          event = settle(room, pending.kind, current, null, false);
+          event = settle(ctx, room, pending.kind, current, null, false);
         }
       } else if (cmd === '跳过') {
         check(mine || (inGroup && isLeader), '现在轮到 ' + playerName(current) + '。');
         check(!pending || pending.kind === 'defense', '该动作已经提交，可用结算指令结束等待。');
         if (pending) {
-          event = settle(room, 'block', current, null, false);
+          event = settle(ctx, room, 'block', current, null, false);
           event = '等待结束，按格挡处理。\n' + event;
         } else {
           event = playerName(current) + ' 跳过行动。';
@@ -685,7 +720,7 @@
           check(!words.length || (words.length === 1 && words[0] === '求助'), '可在指令尾加「求助」等待喊话。');
           const kind = cmd === '格挡' ? 'block' : 'dodge';
           if (words.length) queueAction(data, room, kind, current);
-          else event = settle(room, kind, current, null, false);
+          else event = settle(ctx, room, kind, current, null, false);
         } else {
           if (pending) return { text: battlePrompt(room) };
           if (cmd === '投掷') {
@@ -709,7 +744,7 @@
           }
           if (mode === '解析') return { text: '。战斗 自析 ｜ 。战斗 求助' };
           if (mode === '求助') queueAction(data, room, 'attack', current);
-          else event = settle(room, 'attack', current, null, mode === '自析');
+          else event = settle(ctx, room, 'attack', current, null, mode === '自析');
         }
       }
     }
