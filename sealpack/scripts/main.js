@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.6
+// @version      1.8.7
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.6';
+  const VERSION = '1.8.7';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -157,6 +157,10 @@
     return lines[Math.floor(Math.random() * lines.length)];
   }
 
+  function deathAnnouncement(name) {
+    return chooseLine(JOURNEY_LINES) + '\n' + name + '结束了这次旅程。';
+  }
+
   function changeHp(data, amount, name, cause = 'fatigue', trapName = '') {
     if (data.dead) return '';
     const before = data.hp;
@@ -181,7 +185,7 @@
     } else {
       lines = [name + '因为体力耗尽而倒下了。'];
     }
-    if (data.dead) lines.push(chooseLine(JOURNEY_LINES), name + '结束了这次旅程。');
+    if (data.dead) lines.push(deathAnnouncement(name));
     return lines.join('\n');
   }
 
@@ -821,14 +825,14 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【发放 v1.8.6】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放 v1.8.7】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const camp=groupContext(ctx),queue=jsonRead(camp,CAMP_QUEUE,{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(camp,CAMP_QUEUE,queue);
-    reply(ctx,msg,'🎁【发放 v1.8.6】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    reply(ctx,msg,'🎁【发放 v1.8.7】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
   registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
@@ -880,7 +884,7 @@
       if (command === '死刑') {
         data.hp = 0;
         data.dead = true;
-        notice = '你被无形的手处死了。';
+        notice = '你被无形的手处死了。\n' + deathAnnouncement(role.name);
       } else {
         if (data.hp === 0) throw Error(role.name + '已经倒下了。');
         notice = changeHp(data, -data.hp, role.name, 'drain');
