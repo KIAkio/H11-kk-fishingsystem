@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.7
+// @version      1.8.8
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.7';
+  const VERSION = '1.8.8';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -23,7 +23,10 @@
   ];
   const JOURNEY_LINES = [
     '“死亡是一枚沉重而干净的果实，我们吃下去，医治太多活着的病症。”',
-    '“你明白，路很远，我不能带着这副身躯走，它太重了。”'
+    '“你明白，路很远，我不能带着这副身躯走，它太重了。”',
+    '“死是一件不必急于求成的事，死是一个必然会降临的节日。”',
+    '“人死了，就像水消失在水中。”',
+    '“今天，xx死了。也许是昨天，我搞不清。”'
   ];
   const GROUP_PROFILE_VAR = '$g地精档案编号表';
   const ROLE_STORE = '$mH11角色数据仓库';
@@ -158,7 +161,7 @@
   }
 
   function deathAnnouncement(name) {
-    return chooseLine(JOURNEY_LINES) + '\n' + name + '结束了这次旅程。';
+    return chooseLine(JOURNEY_LINES).replace(/xx/g, () => name) + '\n' + name + '结束了这次旅程。';
   }
 
   function changeHp(data, amount, name, cause = 'fatigue', trapName = '') {
@@ -825,14 +828,14 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【发放 v1.8.7】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放 v1.8.8】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const camp=groupContext(ctx),queue=jsonRead(camp,CAMP_QUEUE,{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(camp,CAMP_QUEUE,queue);
-    reply(ctx,msg,'🎁【发放 v1.8.7】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    reply(ctx,msg,'🎁【发放 v1.8.8】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
   registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
