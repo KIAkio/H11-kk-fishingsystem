@@ -24,19 +24,19 @@ jobs:
       - name: Read package version
         shell: bash
         run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' sealpack/info.toml | head -n 1)"
+          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' goblin-backpack-sealpack/info.toml | head -n 1)"
           test -n "$VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "SEALPACK_FILE=goblin-backpack-$VERSION.sealpack" >> "$GITHUB_ENV"
 
       - name: JavaScript syntax check
-        run: node --check sealpack/scripts/main.js
+        run: node --check goblin-backpack-sealpack/scripts/main.js
 
       - name: Validate and pack Sealpack
         run: |
-          npx --yes sealpack@0.1.2 validate sealpack
+          npx --yes sealpack@0.1.2 validate goblin-backpack-sealpack
           mkdir -p dist
-          npx --yes sealpack@0.1.2 pack sealpack --out "dist/$SEALPACK_FILE"
+          npx --yes sealpack@0.1.2 pack goblin-backpack-sealpack --out "dist/$SEALPACK_FILE"
           cp "dist/$SEALPACK_FILE" dist/goblin-backpack.sealpack
 
       - name: Publish GitHub Release
@@ -63,13 +63,13 @@ jobs:
       - name: Read fishing package version
         shell: bash
         run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' fishing-sealpack/info.toml | head -n 1)"
+          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' fishing-goblin-backpack-sealpack/info.toml | head -n 1)"
           test -n "$VERSION"
           echo "FISHING_VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Validate and pack fishing Sealpack
         run: |
-          node --check fishing-sealpack/scripts/main.js
+          node --check fishing-goblin-backpack-sealpack/scripts/main.js
           npx --yes sealpack@0.1.2 validate fishing-sealpack
           mkdir -p dist
           npx --yes sealpack@0.1.2 pack fishing-sealpack --out "dist/h11-fishing-$FISHING_VERSION.sealpack"
