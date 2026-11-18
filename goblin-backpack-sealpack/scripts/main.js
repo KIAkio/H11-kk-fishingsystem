@@ -627,7 +627,7 @@
   ].join('\n');
   registerCommand('指令H11', '查看 H11 全部玩法指令：.指令H11', (ctx, msg) => reply(ctx, msg, H11_HELP));
 
-  // 每条收到的消息都会检查当前角色的生命时间线；离线期间未成功发送的通知会留在角色存档，重连后收到下一条消息时重试。
+  // 离线期间未发送的饥饿倒下通知保存在角色存档，重连后下一条消息到达时重试。
   ext.onMessageReceived = (ctx, msg) => {
     try {
       const role = currentRole(ctx);
@@ -973,7 +973,7 @@
       const target = owner === getPlayerId(ctx) ? ctx : temporaryContext(ctx, owner, sourceGroupKey(ctx) === 'private' ? '' : sourceGroupKey(ctx));
       const data = loadData(target, role, null, false);
       const hearts = data.dead ? '0👻' : data.hp === 0 ? '0🖤' : String(data.hp) + '❤️';
-      reply(ctx, msg, '【' + role.name + ' ' + String(role.id).padStart(3, '0') + '的状态】\\n' + hearts +
+      reply(ctx, msg, '【' + role.name + ' ' + String(role.id).padStart(3, '0') + '的状态】\n' + hearts +
         '\n生命值：' + data.hp + ' / ' + data.maxHp +
         (Number(data.hunger) === 0 ? '\n【饥饿】' : '') +
         '\n饱腹值：' + String(Math.max(0, Number(data.hunger) || 0)) +
@@ -985,7 +985,7 @@
     for (const [owner, roles] of Object.entries(profiles.members || {})) {
       for (const role of roles || []) rows.push(campStatusLine(ctx, owner, role));
     }
-    reply(ctx, msg, '🏕️【营地状态】\\n' + (rows.length ? rows.join('\n') : '暂无已注册角色。'));
+    reply(ctx, msg, '🏕️【营地状态】\n' + (rows.length ? rows.join('\n') : '暂无已注册角色。'));
   });
 
   // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
@@ -1057,3 +1057,44 @@
     if (!name) {
       reply(ctx, msg, '请指定要丢弃的物品，例如：.丢弃 蓝莓 2');
       return;
+    }
+    if (amount !== -1 && (!Number.isFinite(amount) || amount < 1)) {
+      reply(ctx, msg, '数量必须是正整数，或填写“全部”。');
+      return;
+    }
+
+    const data = loadData(ctx);
+    let foundCategory = '';
+    for (const key of Object.keys(CATEGORY)) {
+      if (data.items[key][name]) {
+        foundCategory = key;
+        break;
+      }
+    }
+
+    if (!foundCategory) {
+      reply(ctx, msg, '背包里没有「' + name + '」。');
+      return;
+    }
+
+    const count = getItemCount(data, foundCategory, name);
+    const qty = amount === -1 ? count : amount;
+    if (qty > count) {
+      reply(ctx, msg, '数量不足，目前只有 ' + count + ' 个「' + name + '」。');
+      return;
+    }
+
+    removeItem(data, foundCategory, name, qty);
+    saveData(ctx, data);
+    reply(ctx, msg, '已丢弃「' + name + '」×' + qty + '。');
+  });
+
+  // 给后续模块的共享协议说明：
+  // 读取：const [raw] = seal.vars.strGet(ctx, '$m地精背包数据');
+  // 写入：seal.vars.strSet(ctx, '$m地精背包数据', JSON.stringify(data));
+  // 群档案编号使用 $g 变量：每个群从 000 独立递增；背包物品使用 $m 变量：跨群同步。\n  // 分类键固定为 fish / mushroom / berry / supplies / equipment / other。
+  // 每项格式：{ count, description, consumable, durability, equipped }。
+  seal.ext.register(ext);
+
+  console.log('[地精背包] v' + VERSION + ' 已加载。共享个人变量：' + DATA_VAR);
+})();
