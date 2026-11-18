@@ -966,7 +966,7 @@
 
   registerCommand('营地状态', '管理员查看全营地状态：.营地状态 [姓名或编号]', (ctx, msg) => {
     if (!mayManageCamp(ctx)) throw Error('只有营地管理员、主群群主或骰主可以使用该指令。');
-    const input = String(msg.message || '').replace(/^\\s*[.。，]?营地状态\\s*/, '').trim();
+    const input = String(msg.message || '').replace(/^\s*[.。，]?营地状态\s*/, '').trim();
     const profiles = loadGroupProfiles(ctx);
     if (input) {
       const { owner, role } = lifeTarget(ctx, msg, '营地状态');
@@ -974,18 +974,18 @@
       const data = loadData(target, role, null, false);
       const hearts = data.dead ? '0👻' : data.hp === 0 ? '0🖤' : String(data.hp) + '❤️';
       reply(ctx, msg, '【' + role.name + ' ' + String(role.id).padStart(3, '0') + '的状态】\\n' + hearts +
-        '\\n生命值：' + data.hp + ' / ' + data.maxHp +
-        (Number(data.hunger) === 0 ? '\\n【饥饿】' : '') +
-        '\\n饱腹值：' + String(Math.max(0, Number(data.hunger) || 0)) +
-        '\\n百折不挠：' + data.falls + '/' + FALL_LIMIT +
-        (data.dead ? '\\n【死亡】' : data.hp === 0 ? '\\n【倒下】' : ''));
+        '\n生命值：' + data.hp + ' / ' + data.maxHp +
+        (Number(data.hunger) === 0 ? '\n【饥饿】' : '') +
+        '\n饱腹值：' + String(Math.max(0, Number(data.hunger) || 0)) +
+        '\n百折不挠：' + data.falls + '/' + FALL_LIMIT +
+        (data.dead ? '\n【死亡】' : data.hp === 0 ? '\n【倒下】' : ''));
       return;
     }
     const rows = [];
     for (const [owner, roles] of Object.entries(profiles.members || {})) {
       for (const role of roles || []) rows.push(campStatusLine(ctx, owner, role));
     }
-    reply(ctx, msg, '🏕️【营地状态】\\n' + (rows.length ? rows.join('\\n') : '暂无已注册角色。'));
+    reply(ctx, msg, '🏕️【营地状态】\\n' + (rows.length ? rows.join('\n') : '暂无已注册角色。'));
   });
 
   // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
