@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.9
+// @version      1.8.10
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.9';
+  const VERSION = '1.8.10';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -282,6 +282,7 @@
   const ATTENDANCE_STORE = '$mH11角色点名仓库';
   const CAMP_QUEUE = '$gH11待发放物品';
   const CAMP_RANK = '$g冬训营点名排行';
+  const DAILY_REPORT = '$gH11营地每日播报';
 
   function temporaryContext(ctx, uid, groupId) {
     const endpoint = ctx.endPoint;
@@ -600,6 +601,8 @@
     '.背包 [鱼类/蘑菇/浆果/日用品/训练装备/其他] — 查看背包',
     '.状态 — 查看 HP、饱腹与倒下次数',
     '.营地状态 — 管理员查看全营地生命、饱腹与倒下记录；可指定姓名或编号',
+    '.营地状态重置 确认 — 管理员重置所有角色生命、饱腹、倒下次数',
+    '.营地背包重置 确认 — 管理员清空所有角色背包物品',
     '.死刑 / .复活 / .汲取 角色名、编号或 @玩家 — 营地管理员指令',
     '.食用 食物名 — 食用背包物品',
     '.丢弃 物品名 [数量/全部] — 丢弃物品',
@@ -630,12 +633,12 @@
   // 离线期间未发送的饥饿倒下通知保存在角色存档，重连后下一条消息到达时重试。
   ext.onMessageReceived = (ctx, msg) => {
     try {
-      const role = currentRole(ctx);
-      if (!role) return;
-      const previous = announceFromCommand;
-      announceFromCommand = text => reply(ctx, msg, text);
-      try { loadData(ctx, role, announceFromCommand, true); }
-      finally { announceFromCommand = previous; }
+      reportMidnight(ctx, msg);
+      replayCampNotices(ctx, msg);
+      if (sourceGroupKey(ctx) === 'private') {
+        const role = currentRole(ctx);
+        if (role) loadData(ctx, role, text => reply(ctx,msg,text), true);
+      }
     } catch (e) {
       console.log('[地精背包] 消息生命同步失败：' + (e.message || e));
     }
@@ -987,6 +990,101 @@
     }
     reply(ctx, msg, '🏕️【营地状态】\n' + (rows.length ? rows.join('\n') : '暂无已注册角色。'));
   });
+
+
+  // 批量管理使用各角色自己的持久化存档，不改变档案编号和点名记录。
+  function allCampRoles(ctx) {
+    const profiles = loadGroupProfiles(ctx), result = [];
+    for (const [owner, roles] of Object.entries(profiles.members || {})) {
+      for (const role of (Array.isArray(roles) ? roles : [])) {
+        result.push({owner, role, ctx: owner === getPlayerId(ctx) ? ctx :
+          temporaryContext(ctx, owner, sourceGroupKey(ctx) === 'private' ? '' : sourceGroupKey(ctx))});
+      }
+    }
+    return result;
+  }
+
+  function resetCamp(ctx, msg, args, kind) {
+    if (!mayManageCamp(ctx)) throw Error('仅营地管理员、主群群主或骰主可操作。');
+    if (String(args.getArgN(1) || '').trim() !== '确认') {
+      reply(ctx, msg, '⚠️ 即将' + (kind === 'life' ? '恢复全营角色生命与饱腹，并清零倒下次数' : '永久清空全营所有角色背包物品') +
+        '。档案编号和点名记录不会删除。\\n请再次输入：。营地' + (kind === 'life' ? '状态重置' : '背包重置') + ' 确认');
+      return;
+    }
+    const roles = allCampRoles(ctx);
+    // 先读取并验证所有存档，再逐个写回；存档损坏时不会开始清理。
+    const updates = roles.map(entry => {
+      const data = loadData(entry.ctx, entry.role, null, false);
+      return {entry, data};
+    });
+    const now = Date.now();
+    for (const {entry, data} of updates) {
+      if (kind === 'life') {
+        data.hp = data.maxHp;
+        data.hunger = 4;
+        data.falls = 0;
+        data.dead = false;
+        data.hungerUpdatedAt = now;
+        data.pendingNotices = [];
+      } else {
+        data.items = createDefaultData().items;
+      }
+      saveData(entry.ctx, data, entry.role);
+    }
+    reply(ctx, msg, '🏕️ 已完成营地' + (kind === 'life' ? '状态' : '背包') + '重置。\\n处理角色：' + updates.length + ' 人。');
+  }
+  registerCommand('营地状态重置', '管理员重置所有角色生命状态：。营地状态重置 确认',
+    (ctx,msg,args) => resetCamp(ctx,msg,args,'life'));
+  registerCommand('营地背包重置', '管理员清空所有角色物品：。营地背包重置 确认',
+    (ctx,msg,args) => resetCamp(ctx,msg,args,'bag'));
+
+  function beijingDay(timestamp) {
+    const d = new Date(timestamp + 8 * 3600000);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') +
+      '-' + String(d.getUTCDate()).padStart(2,'0');
+  }
+  function reportMidnight(ctx, msg) {
+    if (sourceGroupKey(ctx) === 'private') return;
+    const group = groupContext(ctx);
+    // 主群统一播报；防止多个群重复发送同一份全营统计。
+    if (sourceGroupKey(ctx) !== groupKey(ctx)) return;
+    const today = beijingDay(Date.now());
+    const record = jsonRead(group, DAILY_REPORT, {date: today, pending: null});
+    if (record.date !== today) {
+      const roles = allCampRoles(ctx);
+      let fallen = 0, dead = 0;
+      for (const entry of roles) {
+        // 把离线期间的饥饿消耗补算到当天，通知保存在角色自己的待发送队列。
+        const data = loadData(entry.ctx, entry.role, null, true);
+        if (data.dead) dead++;
+        else if (data.hp <= 0) fallen++;
+      }
+      record.date = today;
+      record.pending = (fallen || dead) ?
+        '本日播报📯：\\n当前无法行动人数：' + fallen + '人，\\n本日死亡人数：' + dead + '人' :
+        '⛺新的一天📯';
+      jsonWrite(group, DAILY_REPORT, record);
+    }
+    if (record.pending) {
+      reply(ctx, msg, record.pending);
+      record.pending = null;
+      jsonWrite(group, DAILY_REPORT, record);
+    }
+  }
+
+  function replayCampNotices(ctx, msg) {
+    if (sourceGroupKey(ctx) === 'private' || sourceGroupKey(ctx) !== groupKey(ctx)) return;
+    for (const entry of allCampRoles(ctx)) {
+      const data = loadData(entry.ctx, entry.role, null, true);
+      if (!data.pendingNotices || !data.pendingNotices.length) continue;
+      // 先保存生命状态，再尝试发送。发送异常时保留未发送的通知供下次重试。
+      while (data.pendingNotices.length) {
+        reply(ctx, msg, data.pendingNotices[0]);
+        data.pendingNotices.shift();
+        saveData(entry.ctx, data, entry.role);
+      }
+    }
+  }
 
   // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
   const CAMP_BREAKFAST_NAMES = new Set(['薄煎饼','燕麦粥','荞麦粥','三明治','鸡蛋面糊煎饼','牛肉蔬菜面','一盘杂粮','面','南瓜松饼','鸡蛋全家','滑蛋贝果']);
