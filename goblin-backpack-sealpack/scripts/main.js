@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.13
+// @version      1.8.14
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.13';
+  const VERSION = '1.8.14';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -283,6 +283,7 @@
   const CAMP_QUEUE = '$gH11待发放物品';
   const CAMP_RANK = '$g冬训营点名排行';
   const DAILY_REPORT = '$gH11营地每日播报';
+  const REPORT_ROUTE = 'h11_daily_report_route';
 
   function temporaryContext(ctx, uid, groupId) {
     const endpoint = ctx.endPoint;
@@ -633,6 +634,7 @@
   // 离线期间未发送的饥饿倒下通知保存在角色存档，重连后下一条消息到达时重试。
   ext.onMessageReceived = (ctx, msg) => {
     try {
+      rememberReportRoute(ctx);
       try { reportMidnight(ctx, msg); }
       catch (e) { console.log('[地精背包] 每日播报失败：' + String(e.message || e)); }
       replayCampNotices(ctx, msg);
@@ -689,6 +691,7 @@
       reply(ctx,msg,'已经绑定了另一个营地主群。');return;
     }
     ext.storageSet(CAMP_SETTING,id);
+    rememberReportRoute(ctx);
     const profiles=readGroupProfiles(ctx);
     let count=0;
     const conflicts=[];
@@ -1076,6 +1079,7 @@
   registerCommand('营地播报', '管理员手动查看并测试每日营地播报：。营地播报', (ctx,msg) => {
     if (!mayManageCamp(ctx)) throw Error('只有营地管理员、主群群主或骰主可以使用该指令。');
     if (sourceGroupKey(ctx) !== groupKey(ctx)) throw Error('请在营地主群使用本指令。');
+    rememberReportRoute(ctx);
     reportMidnight(ctx,msg,true);
   });
 
@@ -1091,6 +1095,57 @@
         saveData(entry.ctx, data, entry.role);
       }
     }
+  }
+
+  // 定时器没有原始群消息，必须保存群 ID、端点 ID 和一个有效的 QQ 用户 ID 来构造发送上下文。
+  function rememberReportRoute(ctx) {
+    const groupId = ext.storageGet(CAMP_SETTING);
+    if (!groupId || sourceGroupKey(ctx) !== groupId || !ctx.endPoint) return;
+    const uid = getPlayerId(ctx);
+    if (!uid || !uid.startsWith('QQ:')) return;
+    const old = JSON.parse(ext.storageGet(REPORT_ROUTE) || '{}');
+    const route = {
+      groupId, endpointId: String(ctx.endPoint.userId || ''),
+      userId: old.groupId === groupId && old.userId ? old.userId : uid
+    };
+    if (!route.endpointId) return;
+    ext.storageSet(REPORT_ROUTE, JSON.stringify(route));
+  }
+
+  function scheduledReportContext() {
+    const raw = ext.storageGet(REPORT_ROUTE);
+    if (!raw) throw Error('未保存主群主动发送信息，请在主群发送一次「。营地播报」完成初始化。');
+    const route = JSON.parse(raw);
+    if (!route.groupId || route.groupId !== ext.storageGet(CAMP_SETTING)) throw Error('营地主群尚未绑定或绑定信息不一致。');
+    const endpoints = typeof seal.getEndPoints === 'function' ? seal.getEndPoints() : [];
+    const ep = endpoints.find(x => String(x.userId) === route.endpointId && x.platform === 'QQ');
+    if (!ep) throw Error('未找到用于发送营地播报的在线 QQ 端点。');
+    const msg = seal.newMessage();
+    msg.platform = ep.platform;
+    msg.messageType = 'group';
+    msg.groupId = route.groupId;
+    msg.sender.userId = route.userId;
+    const ctx = seal.createTempCtx(ep, msg);
+    if (!ctx || sourceGroupKey(ctx) !== route.groupId) throw Error('无法创建营地主群的定时发送上下文。');
+    return {ctx,msg};
+  }
+
+  // 海豹 JS 定时任务每分钟唤醒一次，用北京时间判断是否到达零点，
+  // 不依赖系统时区，也不依赖玩家发消息；离线补报仍由消息钩子负责。
+  if (typeof seal.ext.registerTask === 'function') {
+    seal.ext.registerTask(ext, 'cron', '* * * * *', () => {
+      const beijing = new Date(Date.now() + 8 * 3600000);
+      if (beijing.getUTCHours() !== 0 || beijing.getUTCMinutes() !== 0) return;
+      try {
+        const {ctx,msg} = scheduledReportContext();
+        reportMidnight(ctx,msg);
+        replayCampNotices(ctx,msg);
+      } catch (e) {
+        console.log('[地精背包] 零点定时播报失败：' + String(e.message || e));
+      }
+    }, 'h11_midnight_report', '北京时间 00:00 自动发送营地状态播报');
+  } else {
+    console.log('[地精背包] 当前海豹版本不支持 registerTask，仍使用消息触发补发。');
   }
 
   // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
