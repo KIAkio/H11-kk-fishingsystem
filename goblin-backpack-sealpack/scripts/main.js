@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.15
+// @version      1.8.16
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.15';
+  const VERSION = '1.8.16';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -1131,7 +1131,7 @@
   }
 
   // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
-  const CAMP_BREAKFAST_NAMES = new Set(['薄煎饼','燕麦粥','荞麦粥','三明治','鸡蛋面糊煎饼','牛肉蔬菜面','一盘杂粮','面','南瓜松饼','鸡蛋全家','滑蛋贝果']);
+  const CAMP_BREAKFAST_NAMES = new Set(['薄煎饼','燕麦粥','荞麦粥','三明治','鸡蛋面糊煎饼','牛肉蔬菜面','一盘杂粮','面','南瓜松饼','鸡蛋全家','滑蛋贝果','蜂蜜脆底小面包']);
   registerCommand('食用', '食用背包中的食物：.食用 食物名称（营地早餐可省略前缀）', (ctx, msg, args) => {
     const requested = String(args.getArgN(1) || '').trim();
     if (!requested) {
