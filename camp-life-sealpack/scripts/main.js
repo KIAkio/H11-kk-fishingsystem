@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.18
+// @version 1.1.19
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.18',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.19',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。'],['蜂蜜脆底小面包','一半松软一半脆脆的外皮，浓郁的蜂蜜味，一口咬下去，幸福感油然而生。不过作为热量炸弹可不要吃太多哟。']];
@@ -152,34 +152,56 @@ cmd('共享','分享食物：.共享 食物名称 @1—3位同学（总人数2�
  reply(c,m,'量不大，不过每人啃一口也还不错？\n\n「'+foodName+'」已由 '+participants.map(x=>x.name).join('、')+' 一起分享。'+(participants.length===2?'\n每人饱腹值 +1，HP +1。':'\n每人 HP +1，饱腹值没有变化。'));
 });
 
+
 const SHARE_KEY='$gH11开放食物分享';
 const SHARE_TYPES={鱼:'fish',鱼类:'fish',fish:'fish',蘑菇:'mushroom',mushroom:'mushroom',浆果:'berry',berry:'berry',日用品:'supplies',supplies:'supplies',训练装备:'equipment',equipment:'equipment',其他:'other',other:'other',早餐:'other',营地早餐:'other'};
-function shareLoad(c){const v=seal.vars.strGet(c,SHARE_KEY),s=Array.isArray(v)?v[0]:'';if(!s)return null;try{return JSON.parse(s)}catch(e){throw Error('群分享存档损坏')}}
+function shareGroup(c){return c.group&&c.group.groupId&&String(c.group.groupId)!=='private'}
+function shareLoad(c){
+ const v=seal.vars.strGet(c,SHARE_KEY),s=Array.isArray(v)?v[0]:'';
+ if(!s)return {nextId:1,offers:[],selections:{}};
+ let x;try{x=JSON.parse(s)}catch(e){throw Error('群分享存档损坏')}
+ if(x&&Array.isArray(x.offers))return {nextId:Number(x.nextId)||1,offers:x.offers,selections:x.selections||{}};
+ // 将旧版单份分享转换为多份结构，保留剩余量和已领取名单。
+ if(x&&x.food&&Number(x.remaining)>0)return {nextId:2,offers:[Object.assign({id:1},x)],selections:{}};
+ return {nextId:1,offers:[],selections:{}};
+}
 function shareSave(c,d){seal.vars.strSet(c,SHARE_KEY,JSON.stringify(d))}
 function argsAll(a){const p=[];for(let i=1;i<=20;i++){const x=String(a.getArgN(i)||'').trim();if(!x)break;p.push(x)}return p}
-cmd('分享','随机分享食物：。分享 种类 名称',(c,m,a)=>{
- if(!c.group||!c.group.groupId||String(c.group.groupId)==='private'){reply(c,m,'请在群聊中分享。');return}
+function shareEffect(total){return total===2?'❤️ HP +1，饱腹 +1':'❤️ HP +1，饱腹不变'}
+function activeOffers(d){return d.offers.filter(x=>x&&Number(x.remaining)>0)}
+function shareName(x){return String(x||'').replace(/^营地早餐：/,'')}
+function shareMatch(a,b){return shareName(a)===shareName(b)}
+function clearSelections(d,id){for(const key of Object.keys(d.selections))if(Number(d.selections[key])===Number(id))delete d.selections[key]}
+cmd('分享','群内随机分享：。分享 种类 名称',(c,m,a)=>{
+ if(!shareGroup(c)){reply(c,m,'请在群聊中分享。');return}
  if(!ok(c)){reply(c,m,'请先注册营地角色。');return}
  const xs=argsAll(a),kind=SHARE_TYPES[xs[0]],name=xs.slice(1).join(' ').trim();
- if(!kind||!name){reply(c,m,'格式：。分享 种类 名称\n例如：。分享 其他 蜂蜜脆底小面包');return}
- const prev=shareLoad(c);
- if(prev&&prev.remaining>0){reply(c,m,'当前还有未分完的'+prev.food+'\n状态影响：'+(prev.total===2?'❤️ HP +1，饱腹 +1':'❤️ HP +1，饱腹不变')+'\n剩余数量：'+prev.remaining);return}
+ if(!kind||!name){reply(c,m,'格式：。分享 种类 名称\n例如：。分享 早餐 蜂蜜脆底小面包');return}
  const d=sync(c);
  if(d.dead||d.hp<=0){reply(c,m,'当前无法行动，不能分享食物。');return}
- // 早餐可能由点名、发放等不同途径获得；统一使用背包核心的食物查找规则。
- const breakfastNames=MENU.map(row=>row[0]);
  const match=find(d,name);
  if(!match){reply(c,m,'背包中没有「'+name+'」。请先用。背包确认物品名称和数量。');return}
  const {k:actualKind,it,name:actual}=match;
- const isBreakfast=Boolean(it.campBreakfast)||breakfastNames.includes(actual.replace(/^营地早餐：/,''));
- const hasFoodEffect=Number.isFinite(Number(it.hungerRestore))&&it.hungerRestore!=null||
-   Number.isFinite(Number(it.hpRestore))&&it.hpRestore!=null;
+ if(kind!=='other'&&kind!==actualKind){reply(c,m,'物品分类不匹配，请使用背包中对应的种类。');return}
+ const isBreakfast=Boolean(it.campBreakfast)||MENU.some(x=>x[0]===shareName(actual));
+ const hasFoodEffect=(it.hungerRestore!=null&&Number.isFinite(Number(it.hungerRestore)))||(it.hpRestore!=null&&Number.isFinite(Number(it.hpRestore)));
  if(!isBreakfast&&!hasFoodEffect){reply(c,m,'「'+name+'」尚未设置食用效果，无法分享。');return}
- const total=2+Math.floor(Math.random()*3),food=actual.replace(/^营地早餐：/,'');
+ const state=shareLoad(c),total=2+Math.floor(Math.random()*3),food=shareName(actual);
  it.count=Number(it.count)-1;if(it.count<=0)delete d.items[actualKind][actual];
  save(c,d);
- shareSave(c,{food,owner:pname(c),ownerId:uid(c),total,remaining:total,claimed:[]});
- reply(c,m,'有缘人可以掰一口'+pname(c)+'的'+food+'\n状态影响：'+(total===2?'❤️ HP +1，饱腹 +1':'❤️ HP +1，饱腹不变')+'\n剩余数量：'+total);
+ const id=state.nextId++;
+ state.offers.push({id,food,actual,category:actualKind,owner:pname(c),ownerId:uid(c),ownerRole:role(c),total,remaining:total,claimed:[],createdAt:Date.now()});
+ shareSave(c,state);
+ reply(c,m,'有缘人可以掰一口'+pname(c)+'的'+food+'\n状态影响：'+shareEffect(total)+'\n剩余数量：'+total);
+});
+cmd('好饿','随机闻到群内正在分享的一份食物：。好饿',(c,m)=>{
+ if(!shareGroup(c)){reply(c,m,'请在群聊中使用。');return}
+ if(!ok(c)){reply(c,m,'请先注册营地角色。');return}
+ const state=shareLoad(c),offers=activeOffers(state);
+ if(!offers.length){reply(c,m,'空气中没有可以分享的食物香气。');return}
+ const chosen=offers[Math.floor(Math.random()*offers.length)];
+ state.selections[uid(c)]=chosen.id;shareSave(c,state);
+ reply(c,m,'空气中似乎有'+chosen.food+'的香气');
 });
 const BITE_LINES=[
  (n,f)=>n+'吃了一口'+f,
@@ -189,20 +211,58 @@ const BITE_LINES=[
  (n,f)=>n+'选择也来蹭一口',
  (n,f)=>'有不蹭一口'+f+'的概率吗？'+n+'的答案是否定的。'
 ];
-cmd('掰一口','食用当前群分享食物：。掰一口',(c,m)=>{
- if(!c.group||!c.group.groupId||String(c.group.groupId)==='private'){reply(c,m,'请在群聊中使用。');return}
+cmd('掰一口','领取刚才通过。好饿闻到的食物：。掰一口',(c,m)=>{
+ if(!shareGroup(c)){reply(c,m,'请在群聊中使用。');return}
  if(!ok(c)){reply(c,m,'请先注册营地角色。');return}
- const sh=shareLoad(c);
- if(!sh||sh.remaining<=0){reply(c,m,'当前没有可分享的食物。');return}
- if((sh.claimed||[]).includes(uid(c))){reply(c,m,'你已经掰过一口啦，留给其他同学吧。');return}
+ const state=shareLoad(c),selected=state.selections[uid(c)];
+ if(selected==null){reply(c,m,'先发送。好饿，闻闻当前可以分享的食物吧。');return}
+ const sh=state.offers.find(x=>Number(x.id)===Number(selected)&&Number(x.remaining)>0);
+ if(!sh){delete state.selections[uid(c)];shareSave(c,state);reply(c,m,'刚才闻到的食物已经没有了，请重新发送。好饿。');return}
+ if((sh.claimed||[]).includes(uid(c))){reply(c,m,'你已经掰过这份食物啦，发送。好饿试试其他食物。');return}
  const d=sync(c);
  if(d.dead||d.hp<=0){reply(c,m,'当前无法行动，不能掰一口。');return}
  d.hp=Math.min(Number(d.maxHp)||10,Number(d.hp)+1);
  if(sh.total===2)d.hunger=Math.min(4,Math.max(0,Number(d.hunger)||0)+1);
  save(c,d);
- sh.claimed=sh.claimed||[];sh.claimed.push(uid(c));sh.remaining--;shareSave(c,sh);
+ sh.claimed=sh.claimed||[];sh.claimed.push(uid(c));sh.remaining--;
+ delete state.selections[uid(c)];
+ if(sh.remaining<=0)clearSelections(state,sh.id);
+ shareSave(c,state);
  const line=BITE_LINES[Math.floor(Math.random()*BITE_LINES.length)](pname(c),sh.food);
- reply(c,m,line+'\n状态影响：'+(sh.total===2?'❤️ HP +1，饱腹 +1':'❤️ HP +1，饱腹不变')+'\n剩余数量：'+sh.remaining);
+ reply(c,m,line+'\n状态影响：'+shareEffect(sh.total)+'\n剩余数量：'+sh.remaining);
+});
+const RECALL_LINES=[
+ f=>f+'的香味消失在空气中',
+ f=>f+'的香味消失在人群中',
+ f=>'一份'+f+'消散了'
+];
+cmd('撤回','撤回自己正在分享的指定食物：。撤回 食物名',(c,m,a)=>{
+ if(!shareGroup(c)){reply(c,m,'请在群聊中使用。');return}
+ if(!ok(c)){reply(c,m,'请先注册营地角色。');return}
+ const name=argsAll(a).join(' ').trim().replace(/^(早餐|营地早餐|其他)\s+/,'');
+ if(!name){reply(c,m,'格式：。撤回 食物名\n例如：。撤回 蜂蜜脆底小面包');return}
+ const state=shareLoad(c);
+ const matches=activeOffers(state).filter(x=>x.ownerId===uid(c)&&shareMatch(x.food,name));
+ if(!matches.length){reply(c,m,'没有找到你正在分享的「'+name+'」。');return}
+ // 同名多份时撤回最近发布的一份；不影响其他同名分享。
+ const sh=matches[matches.length-1];
+ sh.remaining=0;clearSelections(state,sh.id);
+ // 未有人领取时，完整返还原物品；已有领取则不返还，避免复制物品。
+ if(!(sh.claimed||[]).length){
+   const d=sync(c),category=sh.category||'other',itemName=sh.actual||sh.food;
+   const it=d.items[category][itemName]||{count:0};
+   it.count=Number(it.count||0)+1;
+   if(category==='other'&&MENU.some(x=>x[0]===shareName(itemName))){
+     it.campBreakfast=true;it.hungerRestore=3;it.hpRestore=1;
+     const expiration=nextEight();
+     const batches=Array.isArray(it.breakfastBatches)?it.breakfastBatches:[];
+     batches.push({count:1,expiresAt:expiration});
+     it.breakfastBatches=batches;it.expiresAt=expiration;
+   }
+   d.items[category][itemName]=it;save(c,d);
+ }
+ shareSave(c,state);
+ reply(c,m,RECALL_LINES[Math.floor(Math.random()*RECALL_LINES.length)](sh.food));
 });
 
 seal.ext.register(ext);console.log('[冬训营生活] v'+VER+' 已加载。');
