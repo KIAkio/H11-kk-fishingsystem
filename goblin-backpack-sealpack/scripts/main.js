@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.14
+// @version      1.8.15
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.14';
+  const VERSION = '1.8.15';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -1130,24 +1130,6 @@
     return {ctx,msg};
   }
 
-  // 海豹 JS 定时任务每分钟唤醒一次，用北京时间判断是否到达零点，
-  // 不依赖系统时区，也不依赖玩家发消息；离线补报仍由消息钩子负责。
-  if (typeof seal.ext.registerTask === 'function') {
-    seal.ext.registerTask(ext, 'cron', '* * * * *', () => {
-      const beijing = new Date(Date.now() + 8 * 3600000);
-      if (beijing.getUTCHours() !== 0 || beijing.getUTCMinutes() !== 0) return;
-      try {
-        const {ctx,msg} = scheduledReportContext();
-        reportMidnight(ctx,msg);
-        replayCampNotices(ctx,msg);
-      } catch (e) {
-        console.log('[地精背包] 零点定时播报失败：' + String(e.message || e));
-      }
-    }, 'h11_midnight_report', '北京时间 00:00 自动发送营地状态播报');
-  } else {
-    console.log('[地精背包] 当前海豹版本不支持 registerTask，仍使用消息触发补发。');
-  }
-
   // 营地菜单中的食物即使由管理员以普通物品发放，也可正常食用。
   const CAMP_BREAKFAST_NAMES = new Set(['薄煎饼','燕麦粥','荞麦粥','三明治','鸡蛋面糊煎饼','牛肉蔬菜面','一盘杂粮','面','南瓜松饼','鸡蛋全家','滑蛋贝果']);
   registerCommand('食用', '食用背包中的食物：.食用 食物名称（营地早餐可省略前缀）', (ctx, msg, args) => {
@@ -1255,6 +1237,27 @@
   // 群档案编号使用 $g 变量：每个群从 000 独立递增；背包物品使用 $m 变量：跨群同步。\n  // 分类键固定为 fish / mushroom / berry / supplies / equipment / other。
   // 每项格式：{ count, description, consumable, durability, equipped }。
   seal.ext.register(ext);
+
+  // 注册完成后才能向海豹核心登记定时任务；否则会触发「请先完成此扩展的注册」。
+  if (typeof seal.ext.registerTask === 'function') {
+    try {
+      seal.ext.registerTask(ext, 'cron', '* * * * *', () => {
+        const beijing = new Date(Date.now() + 8 * 3600000);
+        if (beijing.getUTCHours() !== 0 || beijing.getUTCMinutes() !== 0) return;
+        try {
+          const {ctx,msg} = scheduledReportContext();
+          reportMidnight(ctx,msg);
+          replayCampNotices(ctx,msg);
+        } catch (e) {
+          console.log('[地精背包] 零点定时播报失败：' + String(e.message || e));
+        }
+      }, 'h11_midnight_report', '北京时间 00:00 自动发送营地状态播报');
+    } catch (e) {
+      console.log('[地精背包] 定时任务注册失败：' + String(e.message || e));
+    }
+  } else {
+    console.log('[地精背包] 当前海豹版本不支持 registerTask，仍使用消息触发补发。');
+  }
 
   console.log('[地精背包] v' + VERSION + ' 已加载。共享个人变量：' + DATA_VAR);
 })();
