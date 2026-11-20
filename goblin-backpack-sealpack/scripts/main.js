@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.12
+// @version      1.8.13
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.12';
+  const VERSION = '1.8.13';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -633,7 +633,8 @@
   // 离线期间未发送的饥饿倒下通知保存在角色存档，重连后下一条消息到达时重试。
   ext.onMessageReceived = (ctx, msg) => {
     try {
-      reportMidnight(ctx, msg);
+      try { reportMidnight(ctx, msg); }
+      catch (e) { console.log('[地精背包] 每日播报失败：' + String(e.message || e)); }
       replayCampNotices(ctx, msg);
       if (sourceGroupKey(ctx) === 'private') {
         const role = currentRole(ctx);
@@ -1043,14 +1044,14 @@
     return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') +
       '-' + String(d.getUTCDate()).padStart(2,'0');
   }
-  function reportMidnight(ctx, msg) {
+  function reportMidnight(ctx, msg, force = false) {
     if (sourceGroupKey(ctx) === 'private') return;
     const group = groupContext(ctx);
     // 主群统一播报；防止多个群重复发送同一份全营统计。
     if (sourceGroupKey(ctx) !== groupKey(ctx)) return;
     const today = beijingDay(Date.now());
-    const record = jsonRead(group, DAILY_REPORT, {date: today, pending: null});
-    if (record.date !== today) {
+    const record = jsonRead(group, DAILY_REPORT, {date: '', pending: null});
+    if (force || record.date !== today) {
       const roles = allCampRoles(ctx);
       let fallen = 0, dead = 0;
       for (const entry of roles) {
@@ -1071,6 +1072,12 @@
       jsonWrite(group, DAILY_REPORT, record);
     }
   }
+
+  registerCommand('营地播报', '管理员手动查看并测试每日营地播报：。营地播报', (ctx,msg) => {
+    if (!mayManageCamp(ctx)) throw Error('只有营地管理员、主群群主或骰主可以使用该指令。');
+    if (sourceGroupKey(ctx) !== groupKey(ctx)) throw Error('请在营地主群使用本指令。');
+    reportMidnight(ctx,msg,true);
+  });
 
   function replayCampNotices(ctx, msg) {
     if (sourceGroupKey(ctx) === 'private' || sourceGroupKey(ctx) !== groupKey(ctx)) return;
