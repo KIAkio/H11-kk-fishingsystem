@@ -859,14 +859,14 @@
     if(owner===sender&&currentRole(ctx)&&currentRole(ctx).id===id){
       const data=loadData(ctx),count=addItem(data,category,itemName,amount,'');
       saveData(ctx,data);
-      reply(ctx,msg,'🎁【发放 v1.8.8】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
+      reply(ctx,msg,'🎁【发放】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已入账，当前持有：'+count+' 件');return;
     }
     // 统一写入群队列；收件人使用自己的角色背包时领取，不使用发送者的个人存档。
     const camp=groupContext(ctx),queue=jsonRead(camp,CAMP_QUEUE,{});
     if(!Array.isArray(queue[key]))queue[key]=[];
     queue[key].push({category,itemName,amount});
     jsonWrite(camp,CAMP_QUEUE,queue);
-    reply(ctx,msg,'🎁【发放 v1.8.8】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
+    reply(ctx,msg,'🎁【发放】\n收件角色：'+role.name+' '+id+'\n物品：'+itemName+' ×'+amount+'\n已登记，对方使用 .背包 后入账。');
   }
   registerCommand('发放','管理员发放：。发放 004 其他 鸡蛋面糊煎饼 1',grantCampItem);
 
@@ -1008,7 +1008,7 @@
     if (!mayManageCamp(ctx)) throw Error('仅营地管理员、主群群主或骰主可操作。');
     if (String(args.getArgN(1) || '').trim() !== '确认') {
       reply(ctx, msg, '⚠️ 即将' + (kind === 'life' ? '恢复全营角色生命与饱腹，并清零倒下次数' : '永久清空全营所有角色背包物品') +
-        '。档案编号和点名记录不会删除。\\n请再次输入：。营地' + (kind === 'life' ? '状态重置' : '背包重置') + ' 确认');
+        '。档案编号和点名记录不会删除。\n请再次输入：。营地' + (kind === 'life' ? '状态重置' : '背包重置') + ' 确认');
       return;
     }
     const roles = allCampRoles(ctx);
@@ -1031,7 +1031,7 @@
       }
       saveData(entry.ctx, data, entry.role);
     }
-    reply(ctx, msg, '🏕️ 已完成营地' + (kind === 'life' ? '状态' : '背包') + '重置。\\n处理角色：' + updates.length + ' 人。');
+    reply(ctx, msg, '🏕️ 已完成营地' + (kind === 'life' ? '状态' : '背包') + '重置。\n处理角色：' + updates.length + ' 人。');
   }
   registerCommand('营地状态重置', '管理员重置所有角色生命状态：。营地状态重置 确认',
     (ctx,msg,args) => resetCamp(ctx,msg,args,'life'));
