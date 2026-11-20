@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.17
+// @version      1.8.18
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.17';
+  const VERSION = '1.8.18';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -632,6 +632,28 @@
       '.营地播报 — 查看或测试每日营地播报',
       '.死刑 / .复活 / .汲取 角色名、编号或 @玩家 — 管理员指令',
       '.发放 @玩家 分类 物品名 数量 — 管理员发放物品'
+    ]},
+    {title:'战斗',lines:[
+      '.战斗 开队 — 队长创建小队（队群）',
+      '.战斗 加入 [角色编号] — 加入小队（队群）',
+      '.战斗 开始 — 队长开始战斗',
+      '.战斗 / .战斗 状态 — 查看当前战况',
+      '.战斗 帮助 — 查看战斗系统完整说明',
+      '.录入 速度60，灵敏65，洞察50，攻击70，防御40 — 录入百分制属性',
+      '.战斗 档案 — 查看战斗属性',
+      '.战斗 穿戴 装备名 / .战斗 脱下 装备名 — 管理装备',
+      '.攻击 [直击|解析|求助] — 攻击并进行 D100 判定',
+      '.战斗 自析 / .战斗 求助 — 处理解析阶段',
+      '.格挡 [求助] / .闪避 [求助] — 遇袭防御检定',
+      '.喊话 行动码 — 队友提供支援',
+      '.结算 行动码 — 结束等待喊话的行动',
+      '.奖励 / .伤害 — 攻击大成功后选择奖励骰或伤害 +30%',
+      '.投掷 物品名 — 灵敏 D100 检定，成功造成 2 点伤害',
+      '.跳过 — 跳过行动',
+      '.治疗 角色名或编号 — 治疗队友',
+      '.探索 [查看|绕开|前进|整备] — 探索事件及检定',
+      '.收队 — 结束队伍',
+      'Roll 点：战斗系统自动进行 D100 检定，显示普通/困难/极难等成功等级'
     ]}
   ];
   const H11_INDEX = [
@@ -669,7 +691,7 @@
   // 其他玩法指令应在海豹核心的“指令前缀”中统一添加中文标点。
   ext.onNotCommandReceived = (ctx,msg)=>{
     const input=String(msg&&msg.message||'').trim();
-    const helpMatch=/^[。，](指令H11|p[1-4]|all)\s*$/i.exec(input);
+    const helpMatch=/^[。，](指令H11|p[1-5]|all)\s*$/i.exec(input);
     if(helpMatch){const key=helpMatch[1].toLowerCase();reply(ctx,msg,key==='指令h11'?H11_INDEX:key==='all'?H11_ALL:h11Page(Number(key.slice(1))-1));}
     const match = /^(?:[。，](死刑|复活|汲取)\s*|复活\s+)(?=\S)/.exec(input);
     if (match) {
