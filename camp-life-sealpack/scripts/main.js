@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.17
+// @version 1.1.18
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.17',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.18',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。'],['蜂蜜脆底小面包','一半松软一半脆脆的外皮，浓郁的蜂蜜味，一口咬下去，幸福感油然而生。不过作为热量炸弹可不要吃太多哟。']];
@@ -166,13 +166,17 @@ cmd('分享','随机分享食物：。分享 种类 名称',(c,m,a)=>{
  if(prev&&prev.remaining>0){reply(c,m,'当前还有未分完的'+prev.food+'\n状态影响：'+(prev.total===2?'❤️ HP +1，饱腹 +1':'❤️ HP +1，饱腹不变')+'\n剩余数量：'+prev.remaining);return}
  const d=sync(c);
  if(d.dead||d.hp<=0){reply(c,m,'当前无法行动，不能分享食物。');return}
- const options=kind==='other'?[name,name.startsWith('营地早餐：')?name:'营地早餐：'+name]:[name];
- const actual=options.find(n=>d.items[kind]&&d.items[kind][n]&&Number(d.items[kind][n].count)>0);
- if(!actual){reply(c,m,'背包中没有「'+name+'」。');return}
- const it=d.items[kind][actual];
- if(!it.campBreakfast&&!Number.isFinite(Number(it.hungerRestore))&&!Number.isFinite(Number(it.hpRestore))){reply(c,m,'该物品没有食用效果，无法分享。');return}
+ // 早餐可能由点名、发放等不同途径获得；统一使用背包核心的食物查找规则。
+ const breakfastNames=MENU.map(row=>row[0]);
+ const match=find(d,name);
+ if(!match){reply(c,m,'背包中没有「'+name+'」。请先用。背包确认物品名称和数量。');return}
+ const {k:actualKind,it,name:actual}=match;
+ const isBreakfast=Boolean(it.campBreakfast)||breakfastNames.includes(actual.replace(/^营地早餐：/,''));
+ const hasFoodEffect=Number.isFinite(Number(it.hungerRestore))&&it.hungerRestore!=null||
+   Number.isFinite(Number(it.hpRestore))&&it.hpRestore!=null;
+ if(!isBreakfast&&!hasFoodEffect){reply(c,m,'「'+name+'」尚未设置食用效果，无法分享。');return}
  const total=2+Math.floor(Math.random()*3),food=actual.replace(/^营地早餐：/,'');
- it.count=Number(it.count)-1;if(it.count<=0)delete d.items[kind][actual];
+ it.count=Number(it.count)-1;if(it.count<=0)delete d.items[actualKind][actual];
  save(c,d);
  shareSave(c,{food,owner:pname(c),ownerId:uid(c),total,remaining:total,claimed:[]});
  reply(c,m,'有缘人可以掰一口'+pname(c)+'的'+food+'\n状态影响：'+(total===2?'❤️ HP +1，饱腹 +1':'❤️ HP +1，饱腹不变')+'\n剩余数量：'+total);
