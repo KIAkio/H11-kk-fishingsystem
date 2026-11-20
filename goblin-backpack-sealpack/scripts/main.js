@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.10
+// @version      1.8.11
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.10';
+  const VERSION = '1.8.11';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
