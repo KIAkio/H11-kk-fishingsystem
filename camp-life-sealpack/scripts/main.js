@@ -248,7 +248,7 @@ cmd('饿炸了ok？','清空当前群所有尚未领取完的共享食物：。�
  state.offers=[];
  state.selections={};
  shareSave(c,state);
- reply(c,m,'所有待命的好心食物都被吸入了黑洞之中……🌌🌪️');
+ reply(c,m,'所有正在待命的好心食物都被吸入了黑洞之中……🌌🌪️');
 });
 const RECALL_LINES=[
  f=>f+'的香味消失在空气中',
