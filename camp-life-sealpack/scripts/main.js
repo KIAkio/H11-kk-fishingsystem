@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name 冬训营生活系统
 // @author KIAkio
-// @version 1.1.19
+// @version 1.1.20
 // @description 跨群点名、营地早餐、食用与饱腹系统
 // ==/UserScript==
 (function(){
 'use strict';
-const EXT='winter_camp_life',VER='1.1.19',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
+const EXT='winter_camp_life',VER='1.1.20',BAG='$m地精背包数据',ATT='$m冬训营点名数据',PROFILE='$g地精档案编号表',RANK='$g冬训营点名排行';
 if(seal.ext.find(EXT))return;
 const ext=seal.ext.new(EXT,'KIAkio',VER);
 const MENU=[['薄煎饼','可咸可甜，按照喜欢的口味添加配料吧~'],['燕麦粥','用牛奶煮制并加入蓝莓酱或蜂蜜，暖心暖胃。'],['荞麦粥','浓香黄油搭配香肠制成的咸味荞麦粥。'],['三明治','黑麦面包，黄油，加上火腿或者金枪鱼罐头，需要加一颗煎蛋也可以哦。'],['鸡蛋面糊煎饼','咸味的饼中掺杂着绿色的野菜，这个香味很难不好吃吧？'],['牛肉蔬菜面','肉和蔬菜炖了不知多久已经十分软烂，不过吃起来有点太咸了？'],['一盘杂粮','玉米，红薯，豌豆和胡萝卜，一颗鸡蛋，在角落里还配了一撮黑胡椒盐。'],['面','朴实的面，一些绿叶菜和一颗煎蛋，稳妥的搭配一定不会出错。'],['南瓜松饼','南瓜味的松饼，以及南瓜...这一块黄瓜是什么鬼？'],['鸡蛋全家','煎蛋，水煮蛋，炒蛋，温泉蛋，蒸蛋。'],['滑蛋贝果','黑麦贝果搭配黑胡椒肉肠和热腾腾的滑蛋，香气浓郁。'],['蜂蜜脆底小面包','一半松软一半脆脆的外皮，浓郁的蜂蜜味，一口咬下去，幸福感油然而生。不过作为热量炸弹可不要吃太多哟。']];
@@ -211,14 +211,24 @@ const BITE_LINES=[
  (n,f)=>n+'选择也来蹭一口',
  (n,f)=>'有不蹭一口'+f+'的概率吗？'+n+'的答案是否定的。'
 ];
-cmd('掰一口','领取刚才通过。好饿闻到的食物：。掰一口',(c,m)=>{
+cmd('掰一口','直接领取指定食物：。掰一口 食物名；或先。好饿再。掰一口',(c,m,a)=>{
  if(!shareGroup(c)){reply(c,m,'请在群聊中使用。');return}
  if(!ok(c)){reply(c,m,'请先注册营地角色。');return}
- const state=shareLoad(c),selected=state.selections[uid(c)];
- if(selected==null){reply(c,m,'先发送。好饿，闻闻当前可以分享的食物吧。');return}
- const sh=state.offers.find(x=>Number(x.id)===Number(selected)&&Number(x.remaining)>0);
- if(!sh){delete state.selections[uid(c)];shareSave(c,state);reply(c,m,'刚才闻到的食物已经没有了，请重新发送。好饿。');return}
- if((sh.claimed||[]).includes(uid(c))){reply(c,m,'你已经掰过这份食物啦，发送。好饿试试其他食物。');return}
+ const state=shareLoad(c),name=argsAll(a).join(' ').trim().replace(/^(早餐|营地早餐|其他)\s+/,'');
+ let sh;
+ if(name){
+   // 指定食物时无需嗅闻；同名多份分享按发布时间优先领取尚未吃过的一份。
+   const matches=activeOffers(state).filter(x=>shareMatch(x.food,name));
+   if(!matches.length){reply(c,m,'当前没有正在分享的「'+name+'」。');return}
+   sh=matches.find(x=>!(x.claimed||[]).includes(uid(c)));
+   if(!sh){reply(c,m,'你已经吃过所有正在分享的「'+name+'」啦。');return}
+ }else{
+   const selected=state.selections[uid(c)];
+   if(selected==null){reply(c,m,'请发送。掰一口 食物名，或先发送。好饿。');return}
+   sh=state.offers.find(x=>Number(x.id)===Number(selected)&&Number(x.remaining)>0);
+   if(!sh){delete state.selections[uid(c)];shareSave(c,state);reply(c,m,'刚才闻到的食物已经没有了，请重新发送。好饿，或指定食物名称。');return}
+   if((sh.claimed||[]).includes(uid(c))){reply(c,m,'你已经掰过这份食物啦，试试其他食物。');return}
+ }
  const d=sync(c);
  if(d.dead||d.hp<=0){reply(c,m,'当前无法行动，不能掰一口。');return}
  d.hp=Math.min(Number(d.maxHp)||10,Number(d.hp)+1);
