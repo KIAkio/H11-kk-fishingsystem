@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: sealpack-releases
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -63,13 +67,13 @@ jobs:
       - name: Read fishing package version
         shell: bash
         run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' fishing-goblin-backpack-sealpack/info.toml | head -n 1)"
+          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' fishing-sealpack/info.toml | head -n 1)"
           test -n "$VERSION"
           echo "FISHING_VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Validate and pack fishing Sealpack
         run: |
-          node --check fishing-goblin-backpack-sealpack/scripts/main.js
+          node --check fishing-sealpack/scripts/main.js
           npx --yes sealpack@0.1.2 validate fishing-sealpack
           mkdir -p dist
           npx --yes sealpack@0.1.2 pack fishing-sealpack --out "dist/h11-fishing-$FISHING_VERSION.sealpack"
