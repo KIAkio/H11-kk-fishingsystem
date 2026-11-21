@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         地精背包核心
 // @author       KIAkio
-// @version      1.8.20
+// @version      1.8.21
 // @description  统一管理钓鱼、地精采集与冬训营日用品和训练装备
 // @timestamp    1794441600
 // ==/UserScript==
@@ -10,7 +10,7 @@
   'use strict';
 
   const EXT_ID = 'goblin_backpack_core';
-  const VERSION = '1.8.20';
+  const VERSION = '1.8.21';
   const DATA_VAR = '$m地精背包数据';
   const DEFAULT_HP = 10;
   const FALL_LIMIT = 3;
@@ -611,7 +611,7 @@
       '.好饿 — 随机闻到一份仍在分享的食物',
       '.掰一口 [食物名] — 不填名称时领取闻到的食物；填写名称时直接领取，无需嗅闻',
       '.撤回 食物名 — 撤回自己尚未结束的一份分享',
-      '.饿炸了ok？ — 清空当前群全部正在分享的食物'
+      '.饿炸了ok？ / .暴风吸入 / .风卷残云 — 清空当前群全部正在分享的食物'
     ]},
     {title:'钓鱼与采集',lines:[
       '.钓鱼 — 开始钓鱼',
